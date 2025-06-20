@@ -1,7 +1,7 @@
 # DeepSearch
 
 **DeepSearch** is a high-performance file search utility developed in Rust.  
-It enables fast and intuitive search operations across local folders and network shared directories (SMB), with support for parallel processing and a user-friendly graphical interface.
+It enables fast and intuitive search operations across local folders and network shared directories (SMB), with support for parallel processing and a user-friendly CLI.
 
 ---
 
@@ -9,7 +9,7 @@ It enables fast and intuitive search operations across local folders and network
 
 - **Insensitive to case and diacritics** when searching file names.
 - **Recursive directory search** through all subfolders.
-- **Graphical user interface**, no command-line usage required.
+- **CLI** fast, simple, neotech style.
 - **Optimized performance** in both local and remote environments, leveraging Rust’s concurrency model.
 
 ---
