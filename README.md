@@ -35,11 +35,10 @@ It enables fast and intuitive search operations across local folders and network
 
 ---
 
-## Interface Preview
+### Demo Video
 
-<video src="https://dailyphoton.com/wp-content/uploads/2025/03/DeepSearch.mp4" controls width="600">
-  Your browser does not support the video tag.
-</video>
+[📽️ Watch DeepSearch demo video](https://dailyphoton.com/wp-content/uploads/2025/03/DeepSearch.mp4)
+
 ---
 
 ## Development Roadmap
