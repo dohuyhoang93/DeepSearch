@@ -1,6 +1,11 @@
 [package]
-name = "DeepSearchRelease"
+name = "DeepSearch"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+rayon = "1.10.0"
+walkdir = "2.5.0"
+colored = "3.0"
+unicode-normalization = "0.1.24"
+num_cpus = "1.16.0"
