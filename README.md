@@ -46,11 +46,10 @@ It enables fast and intuitive search operations across local folders and network
 
 ---
 
-## Interface Preview
+## Preview
 
-<video src="https://dailyphoton.com/wp-content/uploads/2025/03/DeepSearch.mp4" controls width="600">
-  Your browser does not support the video tag.
-</video>
+[Demo video](https://dailyphoton.com/wp-content/uploads/2025/03/DeepSearch.mp4)
+
 ---
 
 ## Development Roadmap
@@ -64,16 +63,8 @@ Planned enhancements in upcoming versions:
 
 ---
 
-## License
-
-At this stage, the software has **not been released under any official license**.  
-Please **do not use for commercial purposes** until a license is explicitly published by the author.
-
----
-
 ## Contribution and Contact
 
-Currently, the source code is not publicly available.  
 For feedback, suggestions, or bug reports, please:
 
 - Submit an issue on the project’s GitHub page (link to be provided), or  
