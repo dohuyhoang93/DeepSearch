@@ -1,74 +1,218 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title></title>
-  <link rel="stylesheet" href="/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSearch</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
+        body {
+            background: linear-gradient(to bottom, #8B0000, #0000FF);
+            color: #00FFFF;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 20px;
+        }
+        header {
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+        }
+        .header::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+
+			background: repeating-linear-gradient(
+				90deg,
+				transparent,
+				transparent 5px,
+				#0000FF 5px,
+				#0000FF 8px
+			);
+
+			filter: drop-shadow(0 0 5px #0000FF);
+			animation: move 2s linear infinite;
+			z-index: 0;
+		}
+        .header::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 2px;
+            background: rgba(0, 255, 255, 1);
+            box-shadow:
+				0 0 5px #00FFFF,
+				0 0 10px #00FFFF,
+				0 0 20px #00FFFF,
+				0 0 40px #00FFFF;
+            animation: scanline 3s linear infinite;
+			z-index: 0;
+        }
+        @keyframes move {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(100px); }
+        }
+        @keyframes scanline {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        .ascii-art {
+            color: #FF0000;
+            text-shadow: 0 0 10px #FF0000, 0 0 20px #FF0000, 0 0 30px #FF0000;
+            font-size: 12px;
+            line-height: 1;
+            white-space: pre;
+            border: 2px solid #00FFFF;
+            box-shadow: 0 0 10px #00FFFF, 0 0 20px #00FFFF;
+            padding: 10px;
+            animation: blink 0.5s infinite, shake 1s infinite;
+            z-index: 1;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(2px); }
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2, h3, h4 {
+            color: #00FFFF;
+            text-shadow: 0 0 10px #00FFFF, 0 0 20px #00FFFF, 0 0 30px #00FFFF;
+            border-bottom: 2px solid #00FFFF;
+            box-shadow: 0 0 10px #00FFFF;
+			padding: 10px;
+            padding-bottom: 5px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: translateY(0); color: #00FFFF; }
+            50% { transform: translateY(-3px); color: #00CED1; }
+            100% { transform: translateY(0); color: #00FFFF; }
+        }
+        a {
+            color: #00FFFF;
+            text-decoration: none;
+            text-shadow: 0 0 5px #00FFFF;
+        }
+        a:hover {
+            text-shadow: 0 0 10px #00FFFF, 0 0 20px #00FFFF;
+        }
+        .repo-button {
+            display: inline-block;
+            padding: 10px 20px;
+            background: linear-gradient(45deg, #8B0000, #0000FF);
+            color: #00FFFF;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            text-decoration: none;
+            border: 2px solid #00FFFF;
+            box-shadow: 0 0 15px #00FFFF, 0 0 25px #00FFFF;
+            transition: box-shadow 0.3s, transform 0.3s, border-color 0.3s;
+            margin-top: 20px;
+            animation: buttonPulse 2s infinite;
+        }
+        .repo-button:hover {
+            box-shadow: 0 0 25px #00FFFF, 0 0 35px #00FFFF, 0 0 45px #00FFFF;
+            transform: scale(1.2);
+            border-color: #FFD700;
+            animation: none;
+        }
+        @keyframes buttonPulse {
+            0% { box-shadow: 0 0 15px #00FFFF, 0 0 25px #00FFFF; }
+            50% { box-shadow: 0 0 20px #00FFFF, 0 0 30px #00FFFF; }
+            100% { box-shadow: 0 0 15px #00FFFF, 0 0 25px #00FFFF; }
+        }
+        code {
+            background-color: #1a1a1a;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+    </style>
 </head>
 <body>
-  <main>
-    <h1></h1>
-    <h1 id="deepsearch">DeepSearch</h1>
-<p><strong>DeepSearch</strong> is a high-performance file search utility developed in Rust.<br>
-It enables fast and intuitive search operations across local folders and network shared directories (SMB), with support for parallel processing and a user-friendly CLI.</p>
-<hr>
-<h2 id="features">Features</h2>
-<ul>
-<li><strong>Insensitive to case and diacritics</strong> when searching file names.</li>
-<li><strong>Recursive directory search</strong> through all subfolders.</li>
-<li><strong>CLI</strong> fast, simple, neotech style.</li>
-<li><strong>Optimized performance</strong> in both local and remote environments, leveraging Rust’s concurrency model.</li>
-</ul>
-<hr>
-<h2 id="usage-guide">Usage Guide</h2>
-<ol>
-<li>Download the latest release (<code>.exe</code> file) from the project repository.</li>
-<li>Launch the application by double-clicking the executable.</li>
-</ol>
-<h3 id="search-procedure">Search Procedure</h3>
-<ol>
-<li>Enter the path to the target directory.</li>
-<li>Input the name of the file you want to search for.</li>
-<li>During the search process, the following commands are available:
-<ul>
-<li>Press <code>s</code> to <strong>stop</strong> the search</li>
-<li>Press <code>p</code> to <strong>pause</strong></li>
-<li>Press <code>r</code> to <strong>resume</strong></li>
-</ul>
-</li>
-</ol>
-<h4 id="example">Example:</h4>
-<ul>
-<li>Directory: <code>C:\Users\YourName\Documents</code></li>
-<li>File Name: <code>report.docx</code></li>
-</ul>
-<hr>
-<h3 id="demo-video">Demo Video</h3>
-<p><a href="https://dailyphoton.com/wp-content/uploads/2025/03/DeepSearch.mp4">📽️ Watch DeepSearch demo video</a></p>
-<hr>
-<h2 id="development-roadmap">Development Roadmap</h2>
-<p>Planned enhancements in upcoming versions:</p>
-<ul>
-<li>Regular expression (regex) search support</li>
-<li>Exporting search results to CSV</li>
-<li>Optional dark mode theme</li>
-<li>Type-ahead file name suggestions</li>
-</ul>
-<hr>
-<h2 id="license">License</h2>
-<p>At this stage, the software has <strong>not been released under any official license</strong>.<br>
-Please <strong>do not use for commercial purposes</strong> until a license is explicitly published by the author.</p>
-<hr>
-<h2 id="contribution-and-contact">Contribution and Contact</h2>
-<p>Currently, the source code is not publicly available.<br>
-For feedback, suggestions, or bug reports, please:</p>
-<ul>
-<li>Submit an issue on the project’s GitHub page (link to be provided), or</li>
-<li>Contact the author directly.</li>
-</ul>
-<hr>
-<p><em>DeepSearch is built with performance, reliability, and usability in mind — for developers, analysts, and IT professionals.</em></p>
-
-  </main>
+    <header class="header">
+        <pre class="ascii-art">
+▐▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▌
+▐--██████╗-███████╗███████╗██████╗-----███████╗███████╗-█████╗-██████╗--██████╗██╗--██╗--▌
+▐--██╔══██╗██╔════╝██╔════╝██╔══██╗----██╔════╝██╔════╝██╔══██╗██╔══██╗██╔════╝██║--██║--▌
+▐--██║--██║█████╗--█████╗--██████╔╝----███████╗█████╗--███████║██████╔╝██║-----███████║--▌
+▐--██║--██║██╔══╝--██╔══╝--██╔═══╝-----╚════██║██╔══╝--██╔══██║██╔══██╗██║-----██╔══██║--▌
+▐--██████╔╝███████╗███████╗██║---------███████║███████╗██║--██║██║--██║╚██████╗██║--██║--▌
+▐--╚═════╝-╚══════╝╚══════╝╚═╝---------╚══════╝╚══════╝╚═╝--╚═╝╚═╝--╚═╝-╚═════╝╚═╝--╚═╝--▌
+▐▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▌
+        </pre>
+    </header>
+    <div class="container">
+        <h1>DeepSearch</h1>
+        <p><strong>DeepSearch</strong> is a high-performance file search utility developed in Rust. It enables fast and intuitive search operations across local folders and network shared directories (SMB), with support for parallel processing and a user-friendly CLI.</p>
+        
+        <h2>Features</h2>
+        <ul>
+            <li>Insensitive to case and diacritics when searching file names.</li>
+            <li>Recursive directory search through all subfolders.</li>
+            <li>CLI fast, simple, neotech style.</li>
+            <li>Optimized performance in both local and remote environments, leveraging Rust’s concurrency model.</li>
+        </ul>
+        
+        <h2>Usage Guide</h2>
+        <ol>
+            <li>Download the latest release (.exe file) from the project repository.</li>
+            <li>Launch the application by double-clicking the executable.</li>
+        </ol>
+        <h3>Search Procedure</h3>
+        <ol>
+            <li>Enter the path to the target directory.</li>
+            <li>Input the name of the file you want to search for.</li>
+            <li>During the search process, the following commands are available:
+                <ul>
+                    <li>Press <code>s</code> to <strong>stop</strong> the search</li>
+                    <li>Press <code>p</code> to <strong>pause</strong></li>
+                    <li>Press <code>r</code> to <strong>resume</strong></li>
+                </ul>
+            </li>
+        </ol>
+        <h4>Example:</h4>
+        <ul>
+            <li>Directory: <code>C:\Users\YourName\Documents</code></li>
+            <li>File Name: <code>report.docx</code></li>
+        </ul>
+        
+        <h2>Demo Video</h2>
+        <p><a href="https://dailyphoton.com/wp-content/uploads/2025/03/DeepSearch.mp4">📽️ Watch DeepSearch demo video</a></p>
+        
+        <h2>Development Roadmap</h2>
+        <ul>
+            <li>Regular expression (regex) search support</li>
+            <li>Exporting search results to CSV</li>
+            <li>Optional dark mode theme</li>
+            <li>Type-ahead file name suggestions</li>
+        </ul>
+        
+        <h2>License</h2>
+        <p>At this stage, the software has <strong>not been released under any official license</strong>. Please <strong>do not use for commercial purposes</strong> until a license is explicitly published by the author.</p>
+        
+        <h2>Contribution and Contact</h2>
+        <p>Currently, the source code is not publicly available. For feedback, suggestions, or bug reports, please:</p>
+        <ul>
+            <li>Submit an issue on the project’s GitHub page (link to be provided), or</li>
+            <li>Contact the author directly.</li>
+        </ul>
+        
+        <p><em>DeepSearch is built with performance, reliability, and usability in mind — for developers, analysts, and IT professionals.</em></p>
+        
+        <a href="https://github.com/dohuyhoang93/DeepSearch/" class="repo-button">Visit Repository</a>
+    </div>
 </body>
 </html>
