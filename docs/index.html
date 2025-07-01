@@ -31,11 +31,11 @@
 				transparent,
 				transparent 5px,
 				#0000FF 5px,
-				#0000FF 8px
+				#0000FF 10px
 			);
 
-			filter: drop-shadow(0 0 5px #0000FF);
-			animation: move 2s linear infinite;
+			filter: drop-shadow(0 0 10px #0000FF);
+			animation: move 5s linear infinite;
 			z-index: 0;
 		}
         .header::after {
@@ -52,11 +52,11 @@
 				0 0 20px #00FFFF,
 				0 0 40px #00FFFF;
             animation: scanline 3s linear infinite;
-			z-index: 0;
+			z-index: 1;
         }
         @keyframes move {
-            0% { transform: translateX(0); }
-            100% { transform: translateX(100px); }
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
         }
         @keyframes scanline {
             0% { transform: translateX(-100%); }
@@ -113,7 +113,7 @@
         .repo-button {
             display: inline-block;
             padding: 10px 20px;
-            background: linear-gradient(45deg, #8B0000, #0000FF);
+            background: linear-gradient(45deg, #8B00FF, #0000FF);
             color: #00FFFF;
             font-family: 'Orbitron', sans-serif;
             font-weight: 700;
