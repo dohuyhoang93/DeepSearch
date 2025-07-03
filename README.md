@@ -20,7 +20,7 @@ It enables fast and intuitive search operations across local folders and network
 
 - **Insensitive to case and diacritics** when searching file names.
 - **Recursive directory search** through all subfolders.
-- **Graphical user interface**, no command-line usage required.
+- **CLI**, neo-tech style, easy & simple.
 - **Optimized performance** in both local and remote environments, leveraging Rust’s concurrency model.
 
 ---
