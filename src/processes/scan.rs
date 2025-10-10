@@ -1,6 +1,8 @@
 use crate::db::FileMetadata;
 use crate::pop::context::Context;
 use crate::utils::normalize_string;
+use crate::display;
+use indicatif::{ParallelProgressIterator, ProgressBar};
 use rayon::prelude::*;
 use std::time::SystemTime;
 use walkdir::WalkDir;
@@ -12,13 +14,12 @@ pub fn scan_directory_initial(mut context: Context) -> anyhow::Result<Context> {
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Target path not set in context"))?;
 
-    println!("🔍 Starting initial scan for '{}'...", root_path.display());
+    let pb = display::new_spinner(&format!("🔍 Starting initial scan for '{}'...", root_path.display()));
+    let (files, count) = perform_scan(&root_path, &pb)?;
+    pb.finish_with_message(format!("✅ Scan complete. Found {} files.", count));
 
-    let (files, count) = perform_scan(&root_path)?;
     context.files_found_count = count;
     context.files_to_index = files;
-
-    println!("✅ Scan complete. Found {} files.", context.files_found_count);
 
     Ok(context)
 }
@@ -30,9 +31,9 @@ pub fn scan_directory_incremental(mut context: Context) -> anyhow::Result<Contex
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Target path not set in context"))?;
 
-    println!("🔄 Starting incremental scan for '{}'...", root_path.display());
-
-    let (mut found_files, _count) = perform_scan(&root_path)?;
+    let pb = display::new_spinner(&format!("🔄 Starting incremental scan for '{}'...", root_path.display()));
+    let (mut found_files, _count) = perform_scan(&root_path, &pb)?;
+    pb.set_message("Comparing file lists...");
 
     let mut files_to_update = vec![];
     let mut loaded_index = context.loaded_index.clone(); // Clone to be able to remove items
@@ -54,11 +55,11 @@ pub fn scan_directory_incremental(mut context: Context) -> anyhow::Result<Contex
     // Any files remaining in loaded_index have been deleted
     let files_to_delete = loaded_index.keys().cloned().collect::<Vec<_>>();
 
-    println!(
+    pb.finish_with_message(format!(
         "✅ Rescan complete. Found {} updates/additions and {} deletions.",
         files_to_update.len(),
         files_to_delete.len()
-    );
+    ));
 
     context.files_to_update = files_to_update;
     context.files_to_delete = files_to_delete;
@@ -67,8 +68,12 @@ pub fn scan_directory_incremental(mut context: Context) -> anyhow::Result<Contex
 }
 
 /// The core scanning logic, performs a 2-phase scan, returns a list of files and metadata.
-fn perform_scan(root_path: &std::path::Path) -> anyhow::Result<(Vec<(String, FileMetadata)>, usize)> {
+fn perform_scan(
+    root_path: &std::path::Path,
+    pb: &ProgressBar,
+) -> anyhow::Result<(Vec<(String, FileMetadata)>, usize)> {
     // Phase 1: Scan files/directories in the top-level directory
+    pb.set_message("Phase 1/2: Discovering directories...");
     let top_level_entries: Vec<_> = WalkDir::new(&root_path)
         .min_depth(1)
         .max_depth(1)
@@ -89,8 +94,15 @@ fn perform_scan(root_path: &std::path::Path) -> anyhow::Result<(Vec<(String, Fil
         .map(|e| e.path().to_path_buf())
         .collect();
 
+    let num_subdirs = subdirs.len() as u64;
+    pb.set_style(display::get_common_progress_style());
+    pb.set_length(num_subdirs);
+    pb.set_position(0);
+    pb.set_message("Phase 2/2: Scanning files...");
+
     let nested_files: Vec<Vec<(String, FileMetadata)>> = subdirs
         .par_iter()
+        .progress_with(pb.clone())
         .map(|subdir| {
             WalkDir::new(subdir)
                 .into_iter()

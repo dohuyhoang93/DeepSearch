@@ -1,8 +1,8 @@
 use crate::pop::context::Context;
+use crate::display;
 
 /// Process: Displays a summary after the workflow is complete.
 pub fn display_summary(context: Context) -> anyhow::Result<Context> {
-    println!("\n🎉 Workflow finished!");
-    println!("   Total files indexed: {}", context.files_found_count);
+    display::show_summary(context.files_found_count);
     Ok(context)
 }

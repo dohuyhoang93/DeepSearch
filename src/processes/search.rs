@@ -1,12 +1,12 @@
 use crate::db::DbManager;
 use crate::pop::context::Context;
 use crate::utils::normalize_string;
-use std::io::{self, Write};
+use crate::display;
+use std::io::{self};
 
 /// Process: Gets the search keyword from the user.
 pub fn get_search_keyword(mut context: Context) -> anyhow::Result<Context> {
-    print!("\n⌨️ Enter search keyword: ");
-    io::stdout().flush()?;
+    display::prompt("\n⌨️ Enter search keyword:");
 
     let mut keyword = String::new();
     io::stdin().read_line(&mut keyword)?;
@@ -19,7 +19,7 @@ pub fn search_index(mut context: Context) -> anyhow::Result<Context> {
     let db_path = context.db_path.as_ref().unwrap();
     let keyword = context.search_keyword.as_ref().unwrap();
 
-    println!("🔍 Searching for '{}' in the selected scope...", keyword);
+    display::show_info(&format!("🔍 Searching for '{}' in the selected scope...", keyword));
 
     let db_manager = DbManager::new(db_path)?;
     // NOTE: Instead of getting all locations, we now iterate over the locations
@@ -44,13 +44,6 @@ pub fn search_index(mut context: Context) -> anyhow::Result<Context> {
 
 /// Process: Displays the search results.
 pub fn display_results(context: Context) -> anyhow::Result<Context> {
-    println!("\n--- Search Results ({} found) ---", context.search_results.len());
-    if context.search_results.is_empty() {
-        println!("No files found.");
-    } else {
-        for path in &context.search_results {
-            println!("{}", path);
-        }
-    }
+    display::show_search_results(&context.search_results);
     Ok(context)
 }
