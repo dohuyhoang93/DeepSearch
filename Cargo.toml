@@ -9,3 +9,10 @@ walkdir = "2.5.0"
 colored = "3.0"
 unicode-normalization = "0.1.24"
 num_cpus = "1.16.0"
+once_cell = "1.19.0"
+redb = "2.6.3"
+serde = { version = "1.0.228", features = ["derive"] }
+anyhow = "1.0.100"
+thiserror = "2.0.17"
+md5 = "0.8.0"
+bincode = { version = "2.0.1", features = ["serde"] }
