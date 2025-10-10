@@ -21,6 +21,7 @@ fn main() -> anyhow::Result<()> {
     registry.register_process("load_existing_index", processes::index::load_existing_index);
     registry.register_process("scan_directory_incremental", processes::scan::scan_directory_incremental);
     registry.register_process("update_index_in_db", processes::index::update_index_in_db);
+    registry.register_process("select_search_scope", processes::scope::select_search_scope);
     registry.register_process("get_search_keyword", processes::search::get_search_keyword);
     registry.register_process("search_index", processes::search::search_index);
     registry.register_process("display_results", processes::search::display_results);
@@ -47,6 +48,7 @@ fn main() -> anyhow::Result<()> {
     registry.register_workflow(
         "search",
         vec![
+            "select_search_scope".to_string(),
             "get_search_keyword".to_string(),
             "search_index".to_string(),
             "display_results".to_string(),

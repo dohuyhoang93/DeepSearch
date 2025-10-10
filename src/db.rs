@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+
 use redb::{Database, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
 use bincode::{Decode, Encode};

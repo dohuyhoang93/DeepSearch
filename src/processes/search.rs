@@ -18,19 +18,22 @@ pub fn get_search_keyword(mut context: Context) -> anyhow::Result<Context> {
 pub fn search_index(mut context: Context) -> anyhow::Result<Context> {
     let db_path = context.db_path.as_ref().unwrap();
     let keyword = context.search_keyword.as_ref().unwrap();
-    // TODO: Mở rộng để cho phép chọn scope (tất cả hoặc một location cụ thể)
 
-    println!("🔍 Searching for '{}'...", keyword);
+    println!("🔍 Searching for '{}' in selected scope...", keyword);
 
     let db_manager = DbManager::new(db_path)?;
-    let all_locations = db_manager.get_all_locations()?;
+    // NOTE: Instead of getting all locations, we now iterate over the locations
+    // selected by the user in the previous step.
+    let locations_to_search = &context.search_locations;
 
     let mut results = vec![];
-    for (location_path, table_name) in all_locations {
+    for (location_path, table_name) in locations_to_search {
         let mut found_paths = db_manager.search_in_table(&table_name, keyword)?;
         // Chuyển từ đường dẫn tương đối sang tuyệt đối
         for path in found_paths.iter_mut() {
-            *path = format!("{}/{}", location_path, path);
+            // Handle potential path separator issues between Windows and POSIX
+            let combined_path = std::path::Path::new(location_path).join(&*path);
+            *path = combined_path.to_string_lossy().to_string();
         }
         results.append(&mut found_paths);
     }
