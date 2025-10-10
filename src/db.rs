@@ -135,7 +135,7 @@ impl DbManager {
             let mut locations_table = write_txn.open_table(LOCATIONS_TABLE)?;
             
             let maybe_name = {
-                // Giới hạn scope của borrow từ .get() trong block này
+                // Limit the scope of the borrow from .get() to this block
                 locations_table.get(root_path)?.map(|guard| guard.value().to_string())
             };
 

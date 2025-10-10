@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use unicode_normalization::char::is_combining_mark;
 use unicode_normalization::UnicodeNormalization;
 
-// Sử dụng Lazy để đảm bảo HashMap chỉ được tạo một lần.
+// Use Lazy to ensure the HashMap is created only once.
 static VIETNAMESE_CHAR_MAP: Lazy<HashMap<char, char>> = Lazy::new(|| {
     let mut map = HashMap::new();
     let pairs = [
@@ -27,15 +27,15 @@ static VIETNAMESE_CHAR_MAP: Lazy<HashMap<char, char>> = Lazy::new(|| {
     map
 });
 
-/// Loại bỏ dấu tiếng Việt bằng bảng ánh xạ đã được khởi tạo một lần.
+/// Removes Vietnamese accents using a pre-initialized mapping table.
 fn remove_vietnamese_accents(s: &str) -> String {
-    s.nfd() // Chuẩn hóa Unicode NFD
-        .filter(|c| !is_combining_mark(*c)) // Xóa dấu kết hợp
-        .map(|c| *VIETNAMESE_CHAR_MAP.get(&c).unwrap_or(&c)) // Thay thế ký tự
+    s.nfd() // Normalize to Unicode NFD
+        .filter(|c| !is_combining_mark(*c)) // Remove combining marks
+        .map(|c| *VIETNAMESE_CHAR_MAP.get(&c).unwrap_or(&c)) // Replace characters
         .collect()
 }
 
-/// Chuẩn hóa chuỗi: Loại bỏ dấu, chuyển thành chữ thường, xóa khoảng trắng dư thừa.
+/// Normalizes a string: removes accents, converts to lowercase, and removes extra whitespace.
 pub fn normalize_string(s: &str) -> String {
     remove_vietnamese_accents(s)
         .chars()

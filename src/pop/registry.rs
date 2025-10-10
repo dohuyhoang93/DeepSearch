@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use super::context::Context;
 
-/// Định nghĩa một Process là một hàm nhận vào Context và trả về một Context mới (hoặc lỗi).
+/// Defines a Process as a function that takes a Context and returns a new Context (or an error).
 pub type Process = fn(Context) -> anyhow::Result<Context>;
 
-/// Registry chứa tất cả các Process và Workflow có sẵn trong ứng dụng.
+/// The Registry holds all available Processes and Workflows in the application.
 pub struct Registry {
     processes: HashMap<String, Process>,
     workflows: HashMap<String, Vec<String>>,

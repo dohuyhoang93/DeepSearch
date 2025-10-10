@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use std::time::SystemTime;
 use walkdir::WalkDir;
 
-/// Process: Quét toàn bộ thư mục lần đầu, giữ lại chiến lược quét 2 giai đoạn.
+/// Process: Scans the entire directory for the first time, retaining the 2-phase scan strategy.
 pub fn scan_directory_initial(mut context: Context) -> anyhow::Result<Context> {
     let root_path = context
         .target_path
@@ -23,7 +23,7 @@ pub fn scan_directory_initial(mut context: Context) -> anyhow::Result<Context> {
     Ok(context)
 }
 
-/// Process: Quét cập nhật, so sánh với index đã có.
+/// Process: Performs an incremental scan, comparing against the existing index.
 pub fn scan_directory_incremental(mut context: Context) -> anyhow::Result<Context> {
     let root_path = context
         .target_path
@@ -35,23 +35,23 @@ pub fn scan_directory_incremental(mut context: Context) -> anyhow::Result<Contex
     let (mut found_files, _count) = perform_scan(&root_path)?;
 
     let mut files_to_update = vec![];
-    let mut loaded_index = context.loaded_index.clone(); // Clone để có thể xóa item
+    let mut loaded_index = context.loaded_index.clone(); // Clone to be able to remove items
 
     for (path, metadata) in found_files.drain(..) {
         if let Some(existing_meta) = loaded_index.get(&path) {
-            // File tồn tại trong index, kiểm tra modified_time
+            // File exists in the index, check modified_time
             if existing_meta.modified_time != metadata.modified_time {
                 files_to_update.push((path.clone(), metadata));
             }
-            // Xóa khỏi loaded_index để theo dõi các file đã bị xóa
+            // Remove from loaded_index to track deleted files
             loaded_index.remove(&path);
         } else {
-            // File không có trong index -> file mới
+            // File is not in the index -> it's a new file
             files_to_update.push((path, metadata));
         }
     }
 
-    // Những file còn lại trong loaded_index là những file đã bị xóa
+    // Any files remaining in loaded_index have been deleted
     let files_to_delete = loaded_index.keys().cloned().collect::<Vec<_>>();
 
     println!(
@@ -66,9 +66,9 @@ pub fn scan_directory_incremental(mut context: Context) -> anyhow::Result<Contex
     Ok(context)
 }
 
-/// Lõi quét, thực hiện logic quét 2 giai đoạn, trả về danh sách file và metadata.
+/// The core scanning logic, performs a 2-phase scan, returns a list of files and metadata.
 fn perform_scan(root_path: &std::path::Path) -> anyhow::Result<(Vec<(String, FileMetadata)>, usize)> {
-    // Giai đoạn 1: Quét file/thư mục trong thư mục cấp 1
+    // Phase 1: Scan files/directories in the top-level directory
     let top_level_entries: Vec<_> = WalkDir::new(&root_path)
         .min_depth(1)
         .max_depth(1)
@@ -82,7 +82,7 @@ fn perform_scan(root_path: &std::path::Path) -> anyhow::Result<(Vec<(String, Fil
         .map(|entry| build_file_data(entry, root_path))
         .collect();
 
-    // Giai đoạn 2: Quét các thư mục cấp 2 trở đi
+    // Phase 2: Scan subdirectories from level 2 onwards
     let subdirs: Vec<_> = top_level_entries
         .par_iter()
         .filter(|e| e.path().is_dir())
@@ -102,7 +102,7 @@ fn perform_scan(root_path: &std::path::Path) -> anyhow::Result<(Vec<(String, Fil
         })
         .collect();
 
-    // Gộp kết quả
+    // Combine results
     for mut vec in nested_files {
         files.append(&mut vec);
     }
@@ -111,7 +111,7 @@ fn perform_scan(root_path: &std::path::Path) -> anyhow::Result<(Vec<(String, Fil
     Ok((files, count))
 }
 
-/// Helper: Xây dựng FileMetadata từ một DirEntry.
+/// Helper: Builds FileMetadata from a DirEntry.
 fn build_file_data(entry: &walkdir::DirEntry, root_path: &std::path::Path) -> (String, FileMetadata) {
     let relative_path = entry
         .path()

@@ -59,10 +59,10 @@ fn main() -> anyhow::Result<()> {
 
     loop {
         println!("\n--- DeepSearch Main Menu ---");
-        println!("1. Initial Scan (Quét mới)");
-        println!("2. Rescan (Quét lại)");
-        println!("3. Search (Tìm kiếm)");
-        println!("q. Quit (Thoát)");
+        println!("1. Initial Scan");
+        println!("2. Rescan");
+        println!("3. Search");
+        println!("q. Quit");
         print!("Select an option: ");
         io::Write::flush(&mut io::stdout())?;
 
@@ -83,7 +83,7 @@ fn main() -> anyhow::Result<()> {
                 engine.run_workflow("search", context)?;
             }
             "q" => break,
-            _ => println!("Lựa chọn không hợp lệ!"),
+            _ => println!("Invalid option!"),
         }
     }
 

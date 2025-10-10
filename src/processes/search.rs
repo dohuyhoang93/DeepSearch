@@ -3,7 +3,7 @@ use crate::pop::context::Context;
 use crate::utils::normalize_string;
 use std::io::{self, Write};
 
-/// Process: Lấy từ khóa tìm kiếm từ người dùng.
+/// Process: Gets the search keyword from the user.
 pub fn get_search_keyword(mut context: Context) -> anyhow::Result<Context> {
     print!("\n⌨️ Enter search keyword: ");
     io::stdout().flush()?;
@@ -14,12 +14,12 @@ pub fn get_search_keyword(mut context: Context) -> anyhow::Result<Context> {
     Ok(context)
 }
 
-/// Process: Thực hiện tìm kiếm trong CSDL.
+/// Process: Performs the search in the database.
 pub fn search_index(mut context: Context) -> anyhow::Result<Context> {
     let db_path = context.db_path.as_ref().unwrap();
     let keyword = context.search_keyword.as_ref().unwrap();
 
-    println!("🔍 Searching for '{}' in selected scope...", keyword);
+    println!("🔍 Searching for '{}' in the selected scope...", keyword);
 
     let db_manager = DbManager::new(db_path)?;
     // NOTE: Instead of getting all locations, we now iterate over the locations
@@ -29,7 +29,7 @@ pub fn search_index(mut context: Context) -> anyhow::Result<Context> {
     let mut results = vec![];
     for (location_path, table_name) in locations_to_search {
         let mut found_paths = db_manager.search_in_table(&table_name, keyword)?;
-        // Chuyển từ đường dẫn tương đối sang tuyệt đối
+        // Convert the relative path to an absolute path
         for path in found_paths.iter_mut() {
             // Handle potential path separator issues between Windows and POSIX
             let combined_path = std::path::Path::new(location_path).join(&*path);
@@ -42,7 +42,7 @@ pub fn search_index(mut context: Context) -> anyhow::Result<Context> {
     Ok(context)
 }
 
-/// Process: Hiển thị kết quả tìm kiếm.
+/// Process: Displays the search results.
 pub fn display_results(context: Context) -> anyhow::Result<Context> {
     println!("\n--- Search Results ({} found) ---", context.search_results.len());
     if context.search_results.is_empty() {

@@ -2,16 +2,15 @@ use crate::db::DbManager;
 use crate::pop::context::Context;
 use std::io::{self, Write};
 
-/// Process: Lấy danh sách các location đã index, cho người dùng chọn scope và lưu vào context.
+/// Process: Gets the list of indexed locations, lets the user select a scope, and saves it to the context.
 pub fn select_search_scope(mut context: Context) -> anyhow::Result<Context> {
     let db_path = context.db_path.as_ref().unwrap();
     let db_manager = DbManager::new(db_path)?;
     let all_locations = db_manager.get_all_locations()?;
 
     if all_locations.is_empty() {
-        println!("
-⚠️ No indexed locations found. Please run an initial scan first.");
-        // Trả về lỗi để dừng workflow
+        println!("\n⚠️ No indexed locations found. Please run an initial scan first.");
+        // Return an error to stop the workflow
         return Err(anyhow::anyhow!("No indexed locations to search."));
     }
 

@@ -2,10 +2,10 @@ use crate::pop::context::Context;
 use std::io::{self, Write};
 use std::path::Path;
 
-/// Process: Lấy đường dẫn thư mục từ người dùng và lưu vào Context.
+/// Process: Gets the target directory path from the user and saves it to the Context.
 pub fn get_target_directory(mut context: Context) -> anyhow::Result<Context> {
     loop {
-        print!("\n⌨️ Enter folder path to index: ");
+        print!("\n⌨️ Enter the folder path to index: ");
         io::stdout().flush()?;
 
         let mut path_str = String::new();
@@ -16,7 +16,7 @@ pub fn get_target_directory(mut context: Context) -> anyhow::Result<Context> {
             context.target_path = Some(path_str.into());
             break;
         } else {
-            println!("❌ Error: Invalid path! Please re-enter.");
+            println!("❌ Error: Invalid path. Please enter a valid, existing path.");
         }
     }
     Ok(context)
