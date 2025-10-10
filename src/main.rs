@@ -3,6 +3,7 @@ use crate::pop::engine::Engine;
 use crate::pop::registry::Registry;
 use std::io;
 use std::path::PathBuf;
+use num_cpus;
 
 mod db;
 mod pop;
@@ -11,6 +12,16 @@ mod utils;
 pub mod display;
 
 fn main() -> anyhow::Result<()> {
+    // --- Configure Rayon Thread Pool ---
+    // For I/O-bound tasks like scanning a network drive, it's beneficial to have more threads
+    // than logical cores. This allows other threads to do CPU work while many are waiting for I/O.
+    // We'll start with a factor of 2.
+    let num_threads = num_cpus::get() * 2;
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .build_global()
+        .unwrap();
+
     let db_path = PathBuf::from("deepsearch_index.redb");
     let mut registry = Registry::new();
 
