@@ -1,6 +1,8 @@
 use crate::db::FileMetadata;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::mpsc::Sender;
+use crate::gui::events::GuiUpdate;
 
 /// The central struct containing all data and state for the application.
 #[derive(Debug, Default)]
@@ -9,6 +11,7 @@ pub struct Context {
     pub db_path: Option<PathBuf>,
     pub target_path: Option<PathBuf>,
     pub files_found_count: usize,
+    pub progress_reporter: Option<Sender<GuiUpdate>>,
 
     // --- Data for Initial Scan ---
     pub files_to_index: Vec<(String, FileMetadata)>,

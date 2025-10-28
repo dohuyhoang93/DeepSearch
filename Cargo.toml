@@ -17,3 +17,11 @@ anyhow = "1.0.100"
 thiserror = "2.0.17"
 md5 = "0.8.0"
 bincode = { version = "2.0.1", features = ["serde"] }
+egui = "0.33"
+eframe = "=0.33"
+rfd = "=0.15.4"
+open = "5.0"
+image = { version = "0.24", features = ["png"] }
+
+[build-dependencies]
+embed-resource = "2.4"

@@ -99,6 +99,28 @@ impl DbManager {
         Ok(table.iter()?.filter_map(Result::ok).map(|(path, table_name)| (path.value().to_string(), table_name.value().to_string())).collect())
     }
 
+    pub fn delete_location(&self, path_to_delete: &str) -> anyhow::Result<()> {
+        let txn = self.db.begin_write()?;
+        {
+            let mut locations_table = txn.open_table(LOCATIONS_TABLE)?;
+
+            // Get the table name, and then drop the immutable borrow.
+            let table_name_to_delete: Option<String> = locations_table
+                .get(path_to_delete)?
+                .map(|guard| guard.value().to_string());
+
+            if let Some(table_name) = table_name_to_delete {
+                let table_def: TableDefinition<&str, &[u8]> = TableDefinition::new(&table_name);
+                
+                // Now we can safely get mutable borrows
+                txn.delete_table(table_def)?;
+                locations_table.remove(path_to_delete)?;
+            }
+        }
+        txn.commit()?;
+        Ok(())
+    }
+
     pub fn search_in_table(&self, table_name: &str, query: &str) -> anyhow::Result<Vec<String>> {
         let table_def: TableDefinition<&str, &[u8]> = TableDefinition::new(table_name);
         let txn = self.db.begin_read()?;
