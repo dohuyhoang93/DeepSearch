@@ -46,44 +46,30 @@ fn main() -> anyhow::Result<()> {
             // --- Font Setup ---
             let mut fonts = egui::FontDefinitions::default();
 
-            // Install Roboto for general text
+            // Install main font
             fonts.font_data.insert(
-                "roboto".to_owned(),
-                egui::FontData::from_static(include_bytes!("../assets/fonts/Roboto-Regular.ttf")).into(),
+                "noto_sans".to_owned(),
+                egui::FontData::from_static(include_bytes!("../assets/fonts/NotoSans.ttf")).into(),
             );
 
-            // Install Noto Color Emoji for emojis/symbols
+            // Install fallback for Japanese
             fonts.font_data.insert(
-                "noto_emoji".to_owned(),
-                egui::FontData::from_static(include_bytes!("../assets/fonts/NotoColorEmoji-Regular.ttf")).into(),
+                "noto_sans_jp".to_owned(),
+                egui::FontData::from_static(include_bytes!("../assets/fonts/NotoSansJP-Regular.ttf")).into(),
             );
 
-            // Set Roboto as the highest priority font
+            // Set up fallback chain
             fonts
                 .families
                 .entry(egui::FontFamily::Proportional)
                 .or_default()
-                .insert(0, "roboto".to_owned());
+                .extend(vec!["noto_sans".to_owned(), "noto_sans_jp".to_owned()]);
 
-            // Set Noto Emoji as the second priority font for proportional text
-            fonts
-                .families
-                .entry(egui::FontFamily::Proportional)
-                .or_default()
-                .push("noto_emoji".to_owned());
-
-            // Do the same for monospace text
             fonts
                 .families
                 .entry(egui::FontFamily::Monospace)
                 .or_default()
-                .insert(0, "roboto".to_owned());
-            
-            fonts
-                .families
-                .entry(egui::FontFamily::Monospace)
-                .or_default()
-                .push("noto_emoji".to_owned());
+                .extend(vec!["noto_sans".to_owned(), "noto_sans_jp".to_owned()]);
             
             cc.egui_ctx.set_fonts(fonts);
 
