@@ -1,125 +1,156 @@
-Chắc chắn rồi. Dựa trên yêu cầu của bạn, tôi đã xây dựng một kế hoạch chi tiết để tái cấu trúc dự án **DeepSearch** theo kiến trúc Hướng quy trình (POP), tích hợp `redb` làm cơ sở dữ liệu chỉ mục (index), và tối ưu hóa quá trình quét lại (rescan).
+# Tài liệu kiến trúc dự án DeepSearch
 
-### **Mục tiêu**
+Tài liệu này mô tả chi tiết kiến trúc và luồng hoạt động của ứng dụng DeepSearch. Mục đích là cung cấp một cái nhìn tổng quan, rõ ràng cho việc bảo trì và phát triển các tính năng trong tương lai.
 
-*   **Tái cấu trúc mã nguồn** từ một file `main.rs` nguyên khối thành một kiến trúc module hóa, linh hoạt, và dễ bảo trì theo mô hình POP.
-*   **Xây dựng hệ thống chỉ mục** bằng `redb` để tăng tốc độ tìm kiếm một cách đáng kể, hỗ trợ nhiều vị trí (ổ đĩa/thư mục) khác nhau.
-*   **Tối ưu hóa việc quét lại** bằng cách chỉ quét các tệp đã thay đổi, thêm mới hoặc xóa bỏ, thay vì quét toàn bộ thư mục mỗi lần.
-*   **Đảm bảo hiệu năng cao** bằng cách duy trì và tối ưu hóa việc xử lý song song trong các tác vụ nặng (quét file, đọc/ghi index).
+### **Mục tiêu đã đạt được**
 
-### **Tổng quan kiến trúc POP**
-
-Chúng ta sẽ mô phỏng lại kiến trúc từ file `pop.py` trong Rust:
-
-1.  **`Context` (Ngữ cảnh):** Một `struct` trung tâm chứa toàn bộ dữ liệu và trạng thái của ứng dụng được truyền qua các bước xử lý.
-2.  **`Process` (Quy trình):** Các hàm độc lập, mỗi hàm thực hiện một nhiệm vụ duy nhất (ví dụ: `lấy_đường_dẫn`, `quét_thư_mục`, `ghi_vào_index`).
-3.  **`Workflow` (Luồng công việc):** Một danh sách các chuỗi tên của các `Process`.
-4.  **`Engine` (Bộ điều khiển):** Một hàm `run_workflow` sẽ nhận vào một `Workflow` và `Context`, sau đó tuần tự gọi các `Process` tương ứng để thực thi.
+*   **Kiến trúc Module hóa:** Tái cấu trúc thành công mã nguồn thành các module riêng biệt, linh hoạt theo mô hình Hướng quy trình (POP), giúp dễ quản lý và mở rộng.
+*   **Hệ thống chỉ mục hiệu năng cao:** Tích hợp thành công cơ sở dữ liệu `redb` để xây dựng và quản lý chỉ mục, cho phép tìm kiếm gần như tức thì trên hàng triệu tệp.
+*   **Tối ưu hóa Quét lại (Rescan):** Triển khai logic quét lại thông minh, chỉ xử lý các tệp đã thay đổi, thêm mới hoặc bị xóa, giúp tiết kiệm thời gian và tài nguyên hệ thống.
+*   **Ứng dụng giao diện đồ họa (GUI):** Phát triển vượt kế hoạch ban đầu (một ứng dụng CLI) để xây dựng một ứng dụng GUI hoàn chỉnh, thân thiện với người dùng bằng `eframe` (egui).
+*   **Hiệu năng cao:** Duy trì và tối ưu hóa việc xử lý song song bằng `rayon` trong các tác vụ nặng (quét file, tìm kiếm), đảm bảo giao diện người dùng luôn mượt mà.
 
 ### **Công nghệ sử dụng**
 
-*   **`rayon`**: Tiếp tục sử dụng để song song hóa việc quét hệ thống tệp.
+*   **`eframe` (egui):** Framework để xây dựng giao diện người dùng đồ họa (GUI).
+*   **`rayon`**: Thư viện xử lý song song, được sử dụng để tăng tốc các tác vụ quét file và tìm kiếm.
 *   **`walkdir`**: Duyệt cây thư mục một cách hiệu quả.
-*   **`redb`**: Cơ sở dữ liệu nhúng hiệu năng cao, an toàn cho đa luồng, dùng để lưu trữ index.
-*   **`serde`**: Để serialize và deserialize dữ liệu trước khi lưu vào `redb`.
-*   **`once_cell`**: Để khởi tạo các tài nguyên tốn kém một lần duy nhất.
-*   **`colored`**: Giữ lại để làm đẹp giao diện CLI.
+*   **`redb`**: Cơ sở dữ liệu nhúng dạng key-value hiệu năng cao, an toàn cho đa luồng, dùng để lưu trữ chỉ mục.
+*   **`serde` & `bincode`**: Để serialize và deserialize dữ liệu (cụ thể là `FileMetadata`) trước khi lưu vào `redb`.
+*   **`once_cell`**: Để khởi tạo các tài nguyên tốn kém một lần duy nhất (ví dụ: bảng chuyển đổi ký tự).
+*   **`open`**: Mở file và thư mục theo mặc định của hệ điều hành.
 
 ---
 
-### **Kế hoạch chi tiết theo từng giai đoạn**
+### **Tổng quan kiến trúc**
 
-#### **Giai đoạn 1: Nền tảng - Cấu trúc lại dự án và thiết lập POP**
+Kiến trúc của DeepSearch được chia thành ba lớp chính: Lớp giao diện (GUI), Lớp xử lý lõi (POP), và Lớp dữ liệu (Database).
 
-1.  **Tạo cấu trúc module mới:**
-    *   `src/main.rs`: Chỉ chứa vòng lặp chính và gọi `Engine`.
-    *   `src/pop/`: Module chứa các thành phần cốt lõi của kiến trúc POP (`context.rs`, `engine.rs`, `registry.rs`).
-    *   `src/db.rs`: Module quản lý mọi tương tác với `redb`.
-    *   `src/processes/`: Thư mục chứa các file định nghĩa `Process` (`input.rs`, `scan.rs`, `index.rs`, `search.rs`).
-    *   `src/utils.rs`: Chứa các hàm tiện ích như `normalize_string`.
+#### **1. Kiến trúc tổng thể: Giao diện (GUI) và Luồng xử lý (Worker)**
 
-2.  **Chiến lược quản lý Index và Schema (Nâng cao):**
-    Chúng ta sẽ sử dụng một **file CSDL `redb` trung tâm duy nhất** (ví dụ: `%APPDATA%\DeepSearch\index.redb`) để quản lý tất cả các vị trí được index. Bên trong file này sẽ có nhiều **bảng (tables)**:
+Ứng dụng hoạt động trên mô hình hai luồng để đảm bảo giao diện người dùng không bao giờ bị "đóng băng" khi thực hiện các tác vụ nặng.
 
-    *   **Bảng Quản lý Vị trí (`locations_table`):**
-        *   **Mục đích:** Theo dõi tất cả các thư mục gốc đã được index.
-        *   **Key:** Đường dẫn tuyệt đối đến thư mục gốc (ví dụ: `"D:\Work"`).
-        *   **Value:** Một ID định danh duy nhất cho thư mục đó (ví dụ: `"idx_a1b2c3"`).
+*   **Luồng GUI (Main Thread):**
+    *   Được quản lý bởi `eframe`.
+    *   Chịu trách nhiệm vẽ toàn bộ giao diện người dùng, xử lý các sự kiện (click chuột, nhập phím), và quản lý trạng thái của UI (trong `DeepSearchApp`).
+    *   Khi người dùng thực hiện một hành động (ví dụ: "Bắt đầu quét"), luồng GUI sẽ không tự thực hiện mà sẽ tạo một `Command` và gửi nó qua một kênh (`mpsc::channel`) cho Luồng xử lý.
 
-    *   **Các Bảng Dữ liệu Index (ví dụ: `idx_a1b2c3`):**
-        *   Mỗi thư mục gốc sẽ có một bảng dữ liệu riêng.
-        *   **Key:** Đường dẫn **tương đối** của file so với thư mục gốc (ví dụ: `"project-a\docs\report.docx"`).
-        *   **Value:** `struct FileMetadata` được định nghĩa như sau:
-            ```rust
-            use serde::{Serialize, Deserialize};
-            
-            #[derive(Serialize, Deserialize, Debug, Clone)]
-            pub struct FileMetadata {
-                pub normalized_name: String,
-                pub modified_time: u64, // Thời gian sửa đổi file (dưới dạng timestamp)
-            }
-            ```
+*   **Luồng xử lý (Worker Thread):**
+    *   Chạy ở chế độ nền, được khởi tạo một lần duy nhất khi ứng dụng bắt đầu.
+    *   Luôn lắng nghe các `Command` được gửi đến từ luồng GUI.
+    *   Chịu trách nhiệm thực thi tất cả các tác vụ nặng: quét thư mục, đọc/ghi cơ sở dữ liệu, tìm kiếm.
+    *   Trong quá trình thực thi, nó sẽ gửi các cập nhật về trạng thái (`GuiUpdate`) trở lại luồng GUI để hiển thị tiến trình (ví dụ: thanh progress bar, thông báo trạng thái).
 
-3.  **Tối ưu hóa tìm kiếm và đặc tính của `redb`:**
-    *   `redb` sử dụng cấu trúc **B-Tree**, có nghĩa là nó **tự động lưu trữ các key theo thứ tự alphabet**.
-    *   Chúng ta **không cần** làm gì thêm để có được sự tối ưu này.
-    *   **Lợi ích:** Việc tìm kiếm theo tiền tố (ví dụ: tìm tất cả file bắt đầu bằng "report") và quét theo khoảng sẽ cực kỳ nhanh chóng và hiệu quả.
+*   **Kênh giao tiếp (Communication Channel):**
+    *   **`Command` (`src/gui/events.rs`):** Enum định nghĩa các lệnh mà luồng GUI có thể gửi cho luồng Worker (ví dụ: `StartInitialScan`, `StartSearch`, `DeleteLocation`).
+    *   **`GuiUpdate` (`src/gui/events.rs`):** Enum định nghĩa các cập nhật mà luồng Worker có thể gửi về cho luồng GUI (ví dụ: `LocationsFetched`, `ScanProgress`, `SearchCompleted`, `Error`).
 
-4.  **Lưu ý quan trọng về Tối ưu hóa Quét:**
-    *   Kiến trúc refactor này sẽ **bảo tồn và tích hợp** chiến lược quét song song hai giai đoạn tinh vi từ `main.rs` gốc. Thay vì dùng một `WalkDir` duy nhất, chiến lược này chủ động 'chia để trị' bằng cách khởi chạy các luồng quét song song riêng biệt cho các thư mục con lớn. Điều này đặc biệt hiệu quả trên ổ đĩa mạng (SMB) và sẽ được triển khai bên trong các process `scan_directory_*`.
+#### **2. Kiến trúc xử lý lõi: Hướng quy trình (Process-Oriented Programming - POP)**
 
-#### **Giai đoạn 2: Xây dựng Workflow cho Lần quét đầu tiên (Initial Scan)**
+Lớp này được triển khai trong module `src/pop` và là "bộ não" của các tác vụ xử lý.
 
-*   **Workflow:** `["get_target_directory", "scan_directory_initial", "write_index_to_db", "display_summary"]`
+1.  **`Context` (`pop/context.rs`):** Một `struct` trung tâm chứa toàn bộ dữ liệu và trạng thái cần thiết cho một chuỗi công việc. Nó được truyền qua và chỉnh sửa bởi mỗi bước trong một workflow.
+2.  **`Process` (`pop/registry.rs`):** Một `type alias` cho một hàm độc lập, nhận vào một `Context` và trả về một `Result<Context>`. Mỗi `Process` chỉ thực hiện một nhiệm vụ duy nhất (ví dụ: `scan_directory_initial`, `write_index_to_db`).
+3.  **`Registry` (`pop/registry.rs`):** Một `struct` chứa `HashMap` để đăng ký và lưu trữ tất cả các `Process` và `Workflow` có sẵn trong ứng dụng.
+4.  **`Workflow`:** Một `Vec<String>` định nghĩa một chuỗi các tên của các `Process` sẽ được thực thi tuần tự.
+5.  **`Engine` (`pop/engine.rs`):** Chứa hàm `run_workflow` nhận vào tên của một `Workflow` và một `Context`, sau đó tuần tự gọi các `Process` tương ứng đã đăng ký trong `Registry` để thực thi.
 
-1.  **Process `get_target_directory`:** Lấy đường dẫn thư mục gốc từ người dùng và lưu vào `Context`.
+#### **3. Kiến trúc cơ sở dữ liệu với `redb` (`src/db.rs`)**
 
-2.  **Process `scan_directory_initial`:**
-    *   Triển khai lại **chiến lược quét song song hai giai đoạn** hiệu quả từ `main.rs` gốc:
-        1.  **Giai đoạn 1:** Quét song song các file/thư mục ở cấp 1.
-        2.  **Giai đoạn 2:** Thu thập các thư mục con và khởi chạy một luồng quét song song riêng biệt cho mỗi thư mục con đó (`par_iter`).
-    *   Process sẽ thu thập danh sách các cặp `(đường_dẫn_tương_đối, FileMetadata)` vào `Context`.
+*   **Một file CSDL duy nhất:** Toàn bộ chỉ mục được lưu trong file `deepsearch_index.redb`.
+*   **Bảng Quản lý Vị trí (`locations`):**
+    *   **Mục đích:** Theo dõi tất cả các thư mục gốc đã được index.
+    *   **Key:** Đường dẫn tuyệt đối đến thư mục gốc (ví dụ: `"C:\Users\YourUser\Documents"`).
+    *   **Value:** Tên của bảng dữ liệu tương ứng (ví dụ: `"index_a1b2c3d4"`), được tạo ra bằng cách băm (MD5) đường dẫn gốc.
+*   **Các Bảng Dữ liệu Index (ví dụ: `index_a1b2c3d4`):**
+    *   Mỗi thư mục gốc có một bảng dữ liệu riêng.
+    *   **Key:** Đường dẫn **tương đối** của file so với thư mục gốc (ví dụ: `"project-a\report.docx"`).
+    *   **Value:** `struct FileMetadata` được serialize bằng `bincode`.
+        ```rust
+        #[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
+        pub struct FileMetadata {
+            pub normalized_name: String, // Tên file đã được chuẩn hóa (viết thường, bỏ dấu)
+            pub modified_time: u64,      // Thời gian sửa đổi file (dưới dạng timestamp)
+        }
+        ```
+*   **Đảm bảo toàn vẹn dữ liệu với Giao dịch nguyên tử (Atomic Transactions):**
+    *   Một trong những tính năng quan trọng nhất của `redb` là hỗ trợ các giao dịch ghi có tính nguyên tử (atomic).
+    *   Trong dự án, tất cả các chuỗi thao tác ghi (thêm, sửa, xóa) cho một tác vụ logic đều được gói gọn trong một giao dịch duy nhất, bắt đầu bằng `db.begin_write()?` và kết thúc bằng `txn.commit()?`.
+    *   Điều này đảm bảo nguyên tắc "tất cả hoặc không có gì": Nếu có bất kỳ lỗi nào xảy ra trước khi `commit()` được gọi, toàn bộ các thay đổi trong giao dịch đó sẽ được hủy bỏ (rollback). Cơ sở dữ liệu sẽ không bao giờ rơi vào trạng thái hỏng hoặc không nhất quán, giúp bảo vệ toàn vẹn dữ liệu chỉ mục.
 
-3.  **Process `write_index_to_db`:**
-    *   Mở một **write transaction**.
-    *   Tra cứu trong `locations_table` để lấy ID bảng dữ liệu, hoặc tạo mới nếu chưa có.
-    *   Mở bảng dữ liệu tương ứng và ghi toàn bộ danh sách đã thu thập ở bước trên.
+### **Cấu trúc thư mục `src`**
 
-4.  **Process `display_summary`:** In ra thông báo hoàn thành.
+```
+src/
+│   db.rs           # Quản lý mọi tương tác với CSDL redb.
+│   main.rs         # Điểm khởi đầu của ứng dụng, thiết lập eframe và các tài nguyên.
+│   utils.rs        # Các hàm tiện ích, ví dụ: normalize_string.
+│
+├── gui/
+│   │   app.rs      # Chứa struct DeepSearchApp, định nghĩa toàn bộ UI và logic trạng thái của GUI.
+│   │   events.rs   # Định nghĩa các enum Command và GuiUpdate.
+│   │   mod.rs
+│
+├── pop/
+│   │   context.rs  # Định nghĩa struct Context.
+│   │   engine.rs   # Định nghĩa Engine và hàm run_workflow.
+│   │   mod.rs
+│   │   registry.rs # Định nghĩa Process, Registry.
+│
+└── processes/
+        index.rs    # Các process liên quan đến việc đọc/ghi chỉ mục vào CSDL.
+        scan.rs     # Các process quét thư mục (initial và incremental).
+        search.rs   # Process thực hiện tìm kiếm.
+        └── ...         # Các file khác có thể trống (di sản từ phiên bản CLI).
+```
 
-#### **Giai đoạn 3: Xây dựng Workflow cho Quét lại (Rescan) và Tìm kiếm**
+### **Luồng hoạt động chi tiết (Workflows)**
 
-*   **Workflow Rescan:** `["get_target_directory", "load_existing_index", "scan_directory_incremental", "update_index_in_db", "display_summary"]`
+Các workflow được định nghĩa và đăng ký trong `gui/app.rs`. Chúng được khởi chạy bởi luồng Worker khi nhận được `Command` tương ứng.
 
-1.  **Process `load_existing_index`:**
-    *   Dựa vào đường dẫn gốc, tra cứu `locations_table` để tìm ID bảng dữ liệu.
-    *   Mở **read transaction** và đọc toàn bộ nội dung bảng dữ liệu đó vào một `HashMap` trong `Context`.
+1.  **Quét lần đầu (Initial Scan)**
+    *   **Kích hoạt:** Người dùng nhập đường dẫn mới và nhấn nút "Start Initial Scan".
+    *   **Luồng:**
+        1.  GUI gửi `Command::StartInitialScan(path)`.
+        2.  Worker nhận lệnh, tạo `Context` và chạy workflow `gui_initial_scan`: `["scan_directory_initial", "write_index_to_db"]`.
+        3.  `scan_directory_initial`: Quét toàn bộ thư mục (sử dụng chiến lược 2 giai đoạn song song) và lưu danh sách file vào `Context`. Gửi `GuiUpdate::ScanProgress` liên tục.
+        4.  `write_index_to_db`: Tạo bảng mới trong `redb` và ghi toàn bộ danh sách file từ `Context` vào đó.
+        5.  Worker gửi `GuiUpdate::ScanCompleted` khi hoàn tất.
 
-2.  **Process `scan_directory_incremental`:**
-    *   Sử dụng lại **chiến lược quét song song hai giai đoạn** để duyệt cây thư mục.
-    *   Với mỗi file tìm thấy, process sẽ so sánh `modified_time` với dữ liệu trong `HashMap` đã tải.
-    *   Phân loại các file thành 3 danh sách trong `Context`: `files_to_add`, `files_to_update`, và `files_to_delete` (những file còn sót lại trong `HashMap` sau khi quét xong).
+2.  **Quét lại (Rescan)**
+    *   **Kích hoạt:** Người dùng nhấn nút "Rescan" trên một vị trí đã được index.
+    *   **Luồng:**
+        1.  GUI gửi `Command::StartRescan(path)`.
+        2.  Worker chạy workflow `gui_rescan`: `["load_existing_index", "scan_directory_incremental", "update_index_in_db"]`.
+        3.  `load_existing_index`: Đọc toàn bộ chỉ mục cũ từ `redb` vào một `HashMap` trong `Context`.
+        4.  `scan_directory_incremental`: Quét lại thư mục. So sánh từng file với `HashMap` đã tải để xác định file mới, file bị thay đổi, và file bị xóa.
+        5.  `update_index_in_db`: Ghi lại các thay đổi (thêm, sửa, xóa) vào bảng tương ứng trong `redb`.
+        6.  Worker gửi `GuiUpdate::ScanCompleted`.
 
-3.  **Process `update_index_in_db`:**
-    *   Mở một **write transaction** và mở đúng bảng dữ liệu.
-    *   Thực hiện 3 thao tác: thêm, cập nhật, và xóa các file tương ứng.
+3.  **Tìm kiếm (Search)**
+    *   **Kích hoạt:** Người dùng nhập từ khóa, chọn phạm vi tìm kiếm và nhấn "Search" (hoặc Enter).
+    *   **Luồng:**
+        1.  GUI gửi `Command::StartSearch { locations, keyword }`.
+        2.  Worker chạy workflow `gui_search`: `["search_index"]`.
+        3.  `search_index`: Chuẩn hóa từ khóa. Duyệt qua các bảng dữ liệu được chọn trong `redb`, tìm kiếm song song các file có `normalized_name` chứa từ khóa.
+        4.  Worker gửi `GuiUpdate::SearchCompleted(results)` với danh sách kết quả.
 
-*   **Workflow Search:** `["get_search_keyword", "select_search_scope", "search_index", "display_results"]`
+### **Hướng dẫn bảo trì và mở rộng**
 
-1.  **Process `get_search_keyword`:** Lấy từ khóa tìm kiếm.
-2.  **Process `select_search_scope`:** Hỏi người dùng muốn tìm ở một vị trí cụ thể hay trên tất cả các vị trí đã index.
-3.  **Process `search_index`:**
-    *   Mở **read transaction**.
-    *   Dựa vào lựa chọn của người dùng, duyệt qua một bảng dữ liệu cụ thể hoặc tất cả các bảng dữ liệu.
-    *   Sử dụng `par_bridge()` để song song hóa việc tìm kiếm.
-    *   Thu thập kết quả vào `Context`.
-4.  **Process `display_results`:** In kết quả.
+*   **Để thêm một Process mới:**
+    1.  Viết một hàm public mới trong một module phù hợp trong `src/processes/` (ví dụ: `my_new_process(Context) -> anyhow::Result<Context>`).
+    2.  Vào `gui/app.rs`, trong khối `thread::spawn`, đăng ký process mới với `registry.register_process("my_new_process", processes::path::to::my_new_process);`.
 
-#### **Giai đoạn 4: Hoàn thiện và Tối ưu**
+*   **Để thêm một Workflow mới:**
+    1.  Trong `gui/app.rs`, đăng ký workflow mới: `registry.register_workflow("my_new_workflow", vec!["process1".to_string(), "process2".to_string()]);`.
+    2.  Tạo một `Command` mới (nếu cần) để kích hoạt workflow này từ GUI.
+    3.  Trong `match command` của luồng Worker, gọi `engine.run_workflow("my_new_workflow", context)`.
 
-1.  **Tích hợp `main.rs`:** Viết lại `main.rs` để trở nên gọn nhẹ, chỉ đóng vai trò điều phối, chọn `Workflow` và khởi chạy `Engine`.
-2.  **Xử lý lỗi:** Thay thế toàn bộ `.unwrap()`, `.expect()` bằng cách xử lý `Result` tường minh (ví dụ: dùng `anyhow` hoặc `thiserror`).
-3.  **Tối ưu hóa:** Đảm bảo các tài nguyên dùng chung được khởi tạo một lần bằng `once_cell::sync::Lazy`.
-4.  **Giao diện người dùng:** Cải tiến các tính năng tương tác như tạm dừng/tiếp tục/dừng.
+*   **Để sửa đổi giao diện:**
+    *   Toàn bộ logic vẽ UI nằm trong `impl eframe::App for DeepSearchApp` trong `src/gui/app.rs`.
+    *   Các hàm `draw_indexing_tab` và `draw_search_tab` chịu trách nhiệm cho hai tab chính của ứng dụng.
 
-Kế hoạch này sẽ biến đổi dự án của bạn thành một ứng dụng mạnh mẽ, có cấu trúc tốt, hiệu năng cao và sẵn sàng để mở rộng trong tương lai. Bạn có muốn tôi bắt đầu thực hiện giai đoạn đầu tiên không?
+*   **Lưu ý về xử lý lỗi:**
+    *   Hạn chế tối đa việc sử dụng `.unwrap()` hoặc `.expect()`.
+    *   Sử dụng toán tử `?` và `anyhow::Result` để cho phép lỗi được trả về một cách tường minh qua các lớp xử lý.
+    *   Các lỗi xảy ra trong luồng Worker nên được bắt lại và gửi về GUI qua `GuiUpdate::Error(String)` để người dùng được thông báo.

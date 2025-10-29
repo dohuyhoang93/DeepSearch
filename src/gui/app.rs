@@ -31,6 +31,7 @@ pub struct DeepSearchApp {
     scan_progress: f32,
     is_running_task: bool,
     confirming_delete: Option<String>,
+    show_about_window: bool,
 
     // --- State for Rescan & Search ---
     locations: Vec<(String, String)>,
@@ -141,6 +142,7 @@ impl Default for DeepSearchApp {
             scan_progress: 0.0,
             is_running_task: false,
             confirming_delete: None,
+            show_about_window: false,
             locations: vec![],
             search_keyword: "".to_string(),
             search_scope: HashMap::new(),
@@ -213,12 +215,62 @@ impl eframe::App for DeepSearchApp {
                 });
         }
 
+        if self.show_about_window {
+            let mut is_open = true;
+            egui::Window::new("About DeepSearch")
+                .open(&mut is_open)
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.heading("DeepSearch");
+                        ui.label(format!("v{}", env!("CARGO_PKG_VERSION")));
+                        ui.add_space(10.0);
+                    });
+
+                    ui.label("A high-performance, cross-platform desktop application for fast file indexing and searching.");
+                    ui.label("Built with Rust and the egui framework.");
+                    ui.add_space(10.0);
+
+                    ui.horizontal(|ui| {
+                        ui.label("Author:");
+                        ui.label("Do Huy Hoang");
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Source Code:");
+                        ui.hyperlink("https://github.com/dohuyhoang93/DeepSearch");
+                    });
+                    ui.add_space(15.0);
+                    
+                    ui.separator();
+                    ui.add_space(10.0);
+
+                    ui.vertical_centered(|ui| {
+                        ui.label("If you find this project useful, please consider supporting its development.");
+                        ui.add_space(10.0);
+                        
+                        ui.strong("Donate via Bank Transfer:");
+                        ui.label("Bank: BIDV (Bank for Investment and Development of Vietnam)");
+                        ui.label("Account Holder: DO HUY HOANG");
+                        ui.label("Account Number: 25610004007052");
+                    });
+                });
+            if !is_open {
+                self.show_about_window = false;
+            }
+        }
+
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("DeepSearch");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button(if self.dark_mode { "🌙" } else { "☼" }).clicked() {
                         self.dark_mode = !self.dark_mode;
+                    }
+                    if ui.button("About").clicked() {
+                        self.show_about_window = true;
                     }
                 });
             });
@@ -231,7 +283,7 @@ impl eframe::App for DeepSearchApp {
                     ui.add(egui::ProgressBar::new(self.scan_progress).show_percentage());
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label("v0.1.0");
+                    ui.label(format!("v{}", env!("CARGO_PKG_VERSION")));
                 });
             });
         });

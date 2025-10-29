@@ -1,6 +1,5 @@
 # DeepSearch
 
-```
 ▐▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▌
 ▐*██████╗*███████╗███████╗██████╗*****███████╗███████╗*█████╗*██████╗**██████╗██╗**██╗*▌
 ▐*██╔══██╗██╔════╝██╔════╝██╔══██╗****██╔════╝██╔════╝██╔══██╗██╔══██╗██╔════╝██║**██║*▌
@@ -9,108 +8,89 @@
 ▐*██████╔╝███████╗███████╗██║*********███████║███████╗██║**██║██║**██║╚██████╗██║**██║*▌
 ▐*╚═════╝*╚══════╝╚══════╝╚═╝*********╚══════╝╚══════╝╚═╝**╚═╝╚═╝**╚═╝*╚═════╝╚═╝**╚═╝*▌
 ▐▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▌
-```
 
-**DeepSearch** is a high-performance file indexing and search utility developed in Rust.  
-It builds a fast, searchable index of your local folders and network shared directories (SMB), allowing for near-instantaneous file name lookups.
+**DeepSearch** is a high-performance, cross-platform file indexing and search utility developed in Rust.  
+It builds a fast, searchable index of your local folders and network shared directories, allowing for near-instantaneous file name lookups.
+
+[**Source Code on GitHub**](https://github.com/dohuyhoang93/DeepSearch)
 
 ---
 
 ## Features
 
+- **Modern & Responsive GUI**: A clean and intuitive graphical user interface built with `eframe` (egui).
+- **Light & Dark Modes**: Toggle between light and dark themes to suit your preference.
 - **Persistent Indexing**: Uses a local `redb` database to store file indexes, allowing for fast subsequent searches without needing to re-scan entire directories.
 - **Incremental Updates**: A "Rescan" feature intelligently compares directories against the existing index to find and apply only the changes (new, modified, or deleted files).
-- **Optimized for Performance**: Leverages Rust’s concurrency model (`rayon`) for both indexing and searching. The thread pool is tuned for I/O-bound workloads like network shares to maximize throughput.
+- **Optimized for Performance**: Leverages Rust’s concurrency model (`rayon`) for both indexing and searching to maximize throughput and keep the UI responsive.
 - **Intelligent Search**: File name search is insensitive to case and diacritics (e.g., `thanh` will match `Thành`).
-- **Recursive Scanning**: Indexes all files in all subdirectories of a given path.
-- **Modern CLI**: An interactive command-line interface with a "neo-tech" style, featuring colors and progress bars for a clear and responsive user experience.
+- **Cross-Platform**: Runs on Windows, macOS, and Linux.
+
+---
+
+## Interface Preview
+
+The application is organized into two main tabs:
+
+1.  **Indexing Tab**: For adding new folders to the index and managing existing ones (rescan, delete).
+2.  **Search Tab**: For performing searches across one or more indexed locations.
+
+A status bar at the bottom provides feedback on current operations and shows a progress bar for long-running tasks.
+
+![image](https://github.com/dohoanglong/DeepSearch/assets/19335991/45123194-361c-403c-913c-25250a5345d4)
+
 
 ---
 
 ## Usage Guide
 
-### Core Concept
-
-DeepSearch works in two main phases: **1. Indexing** and **2. Searching**. You must first index a directory to make its contents searchable.
-
-### 1. Initial Scan (Indexing a new directory)
+### 1. Indexing a New Folder
 
 This is the first step for any new directory you want to make searchable.
 
-1.  Launch the application (`DeepSearch.exe`).
-2.  Select `1. Initial Scan` from the main menu.
-3.  When prompted, enter the full path to the directory you want to index (e.g., `C:\Users\YourName\Documents` or `\\server\share`).
-4.  The application will scan the entire directory and build a searchable index. A progress bar will show the status of the scan.
+1.  Launch the application.
+2.  On the **Indexing** tab, find the "Initial Scan" section.
+3.  Click **"Browse..."** to pick a folder, or paste the full path directly into the "New Folder Path" text field (e.g., `C:\Users\YourName\Documents` or `\\server\share`).
+4.  Click **"Start Initial Scan"**. 
+5.  The status bar will show the scanning progress. Once complete, the new location will appear in the "Manage Indexed Locations" list.
 
 ### 2. Searching the Index
 
 Once one or more directories have been indexed, you can search them.
 
-1.  From the main menu, select `3. Search`.
-2.  A menu will appear showing all previously indexed locations. Select the scope you want to search in (e.g., a specific location or all indexed locations).
-3.  When prompted, enter your search keyword.
-4.  Results matching the file name will be displayed instantly.
+1.  Switch to the **Search** tab.
+2.  In the left-hand "Search In:" panel, check the boxes for the locations you want to search within.
+3.  Type your query into the **"Keyword"** text field.
+4.  Click the **"Search"** button or press `Enter`.
+5.  Results will appear instantly in the right-hand panel.
+6.  You can **right-click** a search result to open the file or its containing folder.
 
 ### 3. Updating an Index (Rescan)
 
-If the contents of an indexed directory have changed (files added, deleted, or modified), run a Rescan to update the index.
+If the contents of an indexed directory have changed, run a Rescan to efficiently update the index.
 
-1.  From the main menu, select `2. Rescan`.
-2.  A menu will appear showing all previously indexed locations. Choose the path you want to update.
-3.  The application will re-scan the directory, compare it with the old index, and efficiently save only the changes.
+1.  On the **Indexing** tab, find the location you want to update in the "Manage Indexed Locations" list.
+2.  Click the **"🔄 Rescan"** button next to its path.
+3.  The application will re-scan the directory, compare it with the old index, and save only the changes.
 
----
+### 4. Deleting an Index
 
-## Preview
+To remove a location and its index from the database:
 
-Below is a representation of the application flow.
-
-**Main Menu:**
-```
---- DeepSearch Main Menu ---
-1. Initial Scan
-2. Rescan
-3. Search
-q. Quit
-Select an option: 
-```
-
-**Scanning with Progress Bar:**
-```
-🔍 Starting initial scan for '\some\network\share'...
-Phase 1/2: Discovering directories...
-Phase 2/2: Scanning files...
-[00:00:07] [████████████████████>------------------] 1325/2400 (ETA: 00:00:06) Phase 2/2: Scanning files...
-```
-
-**Search Workflow:**
-```
---- Select Search Scope ---
-1. C:\Users\YourName\Documents
-2. \\some\network\share
-a. All
-⌨️ Select a location to search in (1, 2, ..., a): 2
-
-⌨️ Enter search keyword: report 2025
-
-🔍 Searching for 'report 2025' in the selected scope...
-
---- Search Results (3 found) ---
-\\some\network\share\archive\Report 2025 Final.docx
-\\some\network\share\drafts\report_2025_v2.pdf
-\\some\network\share\project-x\report-2025.xlsx
-```
+1.  On the **Indexing** tab, find the location in the "Manage Indexed Locations" list.
+2.  Click the **"🗑 Delete"** button next to its path and confirm the action.
 
 ---
 
 ## Development Roadmap
 
-Planned enhancements in upcoming versions:
+Planned enhancements for future versions:
 
-- Regular expression (regex) search support  
-- Exporting search results to CSV  
-- Optional dark mode theme  
-- Type-ahead file name suggestions  
+- [ ] Search within file contents (content indexing).
+- [ ] Support for regular expressions (regex) and wildcards in search queries.
+- [ ] Exporting search results to CSV or text files.
+- [ ] Advanced settings for configuring exclude patterns.
+- [ ] Saving search scopes as profiles.
 
 ---
 
@@ -118,9 +98,9 @@ Planned enhancements in upcoming versions:
 
 For feedback, suggestions, or bug reports, please:
 
-- Submit an issue on the project’s GitHub page (link to be provided), or  
+- Submit an issue on the project’s GitHub page, or  
 - Contact the author directly.
 
 ---
 
-_DeepSearch is built with performance, reliability, and usability in mind — for developers, analysts, and IT professionals.
+_DeepSearch is built with performance, reliability, and usability in mind — for developers, analysts, and IT professionals._
