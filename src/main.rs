@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
 
     // --- Configure and Run the GUI ---
     let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_icon(icon),
+        viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]).with_min_inner_size([600.0, 400.0]).with_icon(icon),
         ..Default::default()
     };
     

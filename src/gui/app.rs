@@ -179,17 +179,31 @@ impl eframe::App for DeepSearchApp {
         let mut visuals = if self.dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() };
         if self.background_texture.is_some() {
             let panel_alpha = self.background_alpha;
-            // Make pop-up windows slightly more opaque than the main panel
             let window_alpha = (panel_alpha as u16 + 20).min(255) as u8;
 
             if self.dark_mode {
-                visuals.panel_fill = egui::Color32::from_rgba_premultiplied(20, 20, 20, panel_alpha); 
+                // Dark mode: semi-transparent black panels, white text
+                visuals.panel_fill = egui::Color32::from_rgba_premultiplied(20, 20, 20, panel_alpha);
                 visuals.window_fill = egui::Color32::from_rgba_premultiplied(30, 30, 30, window_alpha);
+                visuals.override_text_color = Some(egui::Color32::WHITE);
+                visuals.window_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(120));
             } else {
-                visuals.panel_fill = egui::Color32::from_rgba_premultiplied(240, 240, 240, panel_alpha); 
-                visuals.window_fill = egui::Color32::from_rgba_premultiplied(250, 250, 250, window_alpha);
+                // Light mode with background -> "Cyberpunk" theme
+                // Start with dark visuals as a base for high contrast widgets
+                visuals = egui::Visuals::dark();
+                let neon_blue = egui::Color32::from_rgb(0, 255, 255);
+
+                // Override text for the neon effect
+                visuals.override_text_color = Some(neon_blue);
+
+                // Make panels and windows transparent
+                visuals.panel_fill = egui::Color32::from_rgba_premultiplied(0, 0, 0, panel_alpha / 2);
+                visuals.window_fill = egui::Color32::from_rgba_premultiplied(20, 20, 20, (panel_alpha as u16 / 2 + 20).min(255) as u8);
+
+                // Style strokes for the theme
+                visuals.window_stroke = egui::Stroke::new(1.0, neon_blue.linear_multiply(0.5));
+                visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, neon_blue.linear_multiply(0.4)); // Button outline
             }
-            visuals.window_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(120));
         }
         ctx.set_visuals(visuals);
 
