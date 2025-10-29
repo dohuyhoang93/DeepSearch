@@ -52,24 +52,36 @@ fn main() -> anyhow::Result<()> {
                 egui::FontData::from_static(include_bytes!("../assets/fonts/NotoSans.ttf")).into(),
             );
 
+            // Install a broad symbol font as a fallback
+            fonts.font_data.insert(
+                "arial".to_owned(),
+                egui::FontData::from_static(include_bytes!("../assets/fonts/arial.ttf")).into(),
+            );
+
+            // Install emoji font for modern emojis
+            fonts.font_data.insert(
+                "noto_emoji".to_owned(),
+                egui::FontData::from_static(include_bytes!("../assets/fonts/NotoColorEmoji-Regular.ttf")).into(),
+            );
+
             // Install fallback for Japanese
             fonts.font_data.insert(
                 "noto_sans_jp".to_owned(),
                 egui::FontData::from_static(include_bytes!("../assets/fonts/NotoSansJP-Regular.ttf")).into(),
             );
 
-            // Set up fallback chain
+            // Set up fallback chain. Order is important.
             fonts
                 .families
                 .entry(egui::FontFamily::Proportional)
                 .or_default()
-                .extend(vec!["noto_sans".to_owned(), "noto_sans_jp".to_owned()]);
+                .extend(vec!["noto_sans".to_owned(), "arial".to_owned(), "noto_emoji".to_owned(), "noto_sans_jp".to_owned()]);
 
             fonts
                 .families
                 .entry(egui::FontFamily::Monospace)
                 .or_default()
-                .extend(vec!["noto_sans".to_owned(), "noto_sans_jp".to_owned()]);
+                .extend(vec!["noto_sans".to_owned(), "arial".to_owned(), "noto_emoji".to_owned(), "noto_sans_jp".to_owned()]);
             
             cc.egui_ctx.set_fonts(fonts);
 
