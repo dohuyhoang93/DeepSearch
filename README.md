@@ -37,7 +37,7 @@ The application is organized into two main tabs:
 
 A status bar at the bottom provides feedback on current operations and shows a progress bar for long-running tasks.
 
-![image](https://github.com/dohoanglong/DeepSearch/assets/19335991/45123194-361c-403c-913c-25250a5345d4)
+![image](./assets/screenshot.png)
 
 
 ---
