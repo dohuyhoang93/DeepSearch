@@ -83,9 +83,11 @@ impl Default for DeepSearchApp {
 
             // The worker loop
             for command in command_receiver {
-                let mut context = Context::default();
-                context.progress_reporter = Some(update_sender.clone());
-                context.db_path = Some(db_path.clone());
+                let mut context = Context {
+                    progress_reporter: Some(update_sender.clone()),
+                    db_path: Some(db_path.clone()),
+                    ..Default::default()
+                };
 
                 match command {
                     Command::FetchLocations => {

@@ -1,8 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use num_cpus;
 use eframe::egui;
-use image;
 
 mod db;
 mod pop;

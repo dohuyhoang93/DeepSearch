@@ -40,13 +40,11 @@ impl DbManager {
         let table = txn.open_table(table_def)?;
 
         let mut map = HashMap::new();
-        for item_result in table.iter()? {
-            if let Ok(item) = item_result {
-                let key = item.0.value().to_string();
-                let value_bytes = item.1.value();
-                let (value, _len): (FileMetadata, usize) = bincode::decode_from_slice(value_bytes, bincode::config::standard())?;
-                map.insert(key, value);
-            }
+        for item in table.iter()?.flatten() {
+            let key = item.0.value().to_string();
+            let value_bytes = item.1.value();
+            let (value, _len): (FileMetadata, usize) = bincode::decode_from_slice(value_bytes, bincode::config::standard())?;
+            map.insert(key, value);
         }
         Ok(map)
     }
