@@ -48,6 +48,10 @@ name = "accesskit"
 version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf203f9d3bd8f29f98833d1fbef628df18f759248a547e7e01cfbf63cda36a99"
+dependencies = [
+ "enumn",
+ "serde",
+]
 
 [[package]]
 name = "accesskit_atspi_common"
@@ -148,6 +152,7 @@ dependencies = [
  "cfg-if",
  "getrandom",
  "once_cell",
+ "serde",
  "version_check",
  "zerocopy",
 ]
@@ -479,6 +484,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
+name = "base64"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
 name = "bincode"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -530,6 +541,9 @@ name = "bitflags"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
+dependencies = [
+ "serde_core",
+]
 
 [[package]]
 name = "block"
@@ -918,6 +932,7 @@ checksum = "adf31f99fad93fe83c1055b92b5c1b135f1ecfa464789817c372000e768d4bd1"
 dependencies = [
  "bytemuck",
  "emath",
+ "serde",
 ]
 
 [[package]]
@@ -936,6 +951,7 @@ dependencies = [
  "glow",
  "glutin",
  "glutin-winit",
+ "home",
  "image 0.25.8",
  "js-sys",
  "log",
@@ -946,6 +962,8 @@ dependencies = [
  "percent-encoding",
  "profiling",
  "raw-window-handle",
+ "ron",
+ "serde",
  "static_assertions",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -969,6 +987,8 @@ dependencies = [
  "log",
  "nohash-hasher",
  "profiling",
+ "ron",
+ "serde",
  "smallvec",
  "unicode-segmentation",
 ]
@@ -1009,6 +1029,7 @@ dependencies = [
  "objc2-ui-kit",
  "profiling",
  "raw-window-handle",
+ "serde",
  "smithay-clipboard",
  "web-time",
  "webbrowser",
@@ -1045,6 +1066,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c615516cdceec867065f20d7db13d8eb8aedd65c9e32cc0c7c379380fa42e6e8"
 dependencies = [
  "bytemuck",
+ "serde",
 ]
 
 [[package]]
@@ -1095,6 +1117,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "enumn"
+version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f9ed6b3789237c8a0c1c505af1c7eb2c560df6186f01b098c3a1064ea532f38"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "epaint"
 version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1110,6 +1143,7 @@ dependencies = [
  "nohash-hasher",
  "parking_lot",
  "profiling",
+ "serde",
 ]
 
 [[package]]
@@ -1561,6 +1595,15 @@ name = "hexf-parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
+
+[[package]]
+name = "home"
+version = "0.5.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d"
+dependencies = [
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "icu_collections"
@@ -2801,6 +2844,19 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "ron"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db09040cc89e461f1a265139777a2bde7f8d8c67c4936f700c63ce3e2904d468"
+dependencies = [
+ "base64",
+ "bitflags 2.10.0",
+ "serde",
+ "serde_derive",
+ "unicode-ident",
 ]
 
 [[package]]

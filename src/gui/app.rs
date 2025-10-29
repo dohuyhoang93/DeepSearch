@@ -18,25 +18,41 @@ enum Tab {
     Search,
 }
 
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(default)]
 pub struct DeepSearchApp {
-    // --- Channel Communication ---
-    command_sender: Sender<Command>,
-    update_receiver: Receiver<GuiUpdate>,
-
-    // --- UI State ---
-    active_tab: Tab,
+    // --- Persisted State ---
     dark_mode: bool,
-    target_path_input: String,
-    current_status: String,
-    scan_progress: f32,
-    is_running_task: bool,
-    confirming_delete: Option<String>,
-    show_about_window: bool,
+    background_alpha: u8,
 
-    // --- State for Rescan & Search ---
+    // --- Runtime State (won't be saved) ---
+    #[serde(skip)]
+    command_sender: Sender<Command>,
+    #[serde(skip)]
+    update_receiver: Receiver<GuiUpdate>,
+    #[serde(skip)]
+    active_tab: Tab,
+    #[serde(skip)]
+    target_path_input: String,
+    #[serde(skip)]
+    current_status: String,
+    #[serde(skip)]
+    scan_progress: f32,
+    #[serde(skip)]
+    is_running_task: bool,
+    #[serde(skip)]
+    confirming_delete: Option<String>,
+    #[serde(skip)]
+    show_about_window: bool,
+    #[serde(skip)]
+    pub background_texture: Option<egui::TextureHandle>,
+    #[serde(skip)]
     locations: Vec<(String, String)>,
+    #[serde(skip)]
     search_keyword: String,
+    #[serde(skip)]
     search_scope: HashMap<String, bool>,
+    #[serde(skip)]
     search_results: Vec<String>,
 }
 
@@ -137,12 +153,14 @@ impl Default for DeepSearchApp {
             update_receiver,
             active_tab: Tab::Indexing,
             dark_mode: true,
+            background_alpha: 210, // Default alpha
             target_path_input: "".to_string(),
             current_status: "Ready. Fetching locations...".to_string(),
             scan_progress: 0.0,
             is_running_task: false,
             confirming_delete: None,
             show_about_window: false,
+            background_texture: None,
             locations: vec![],
             search_keyword: "".to_string(),
             search_scope: HashMap::new(),
@@ -151,12 +169,53 @@ impl Default for DeepSearchApp {
     }
 }
 
-// --- App UI and Logic ---
-
 impl eframe::App for DeepSearchApp {
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, eframe::APP_KEY, self);
+    }
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let visuals = if self.dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() };
+        // --- Custom visuals and background drawing ---
+        let mut visuals = if self.dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() };
+        if self.background_texture.is_some() {
+            let panel_alpha = self.background_alpha;
+            // Make pop-up windows slightly more opaque than the main panel
+            let window_alpha = (panel_alpha as u16 + 20).min(255) as u8;
+
+            if self.dark_mode {
+                visuals.panel_fill = egui::Color32::from_rgba_premultiplied(20, 20, 20, panel_alpha); 
+                visuals.window_fill = egui::Color32::from_rgba_premultiplied(30, 30, 30, window_alpha);
+            } else {
+                visuals.panel_fill = egui::Color32::from_rgba_premultiplied(240, 240, 240, panel_alpha); 
+                visuals.window_fill = egui::Color32::from_rgba_premultiplied(250, 250, 250, window_alpha);
+            }
+            visuals.window_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(120));
+        }
         ctx.set_visuals(visuals);
+
+        if let Some(texture) = &self.background_texture {
+            let painter = ctx.layer_painter(egui::LayerId::background());
+            let screen_rect = ctx.viewport_rect(); // FIX: Use viewport_rect() instead of deprecated screen_rect()
+            let texture_size = texture.size_vec2();
+            let screen_aspect = screen_rect.width() / screen_rect.height();
+            let texture_aspect = texture_size.x / texture_size.y;
+
+            // CORRECT "Cover" logic
+            let image_rect = if screen_aspect > texture_aspect {
+                // Screen is WIDER than texture -> scale to screen WIDTH
+                let width = screen_rect.width();
+                let height = width / texture_aspect;
+                let y_offset = (screen_rect.height() - height) / 2.0;
+                egui::Rect::from_min_size(screen_rect.min + egui::vec2(0.0, y_offset), egui::vec2(width, height))
+            } else {
+                // Screen is TALLER than texture -> scale to screen HEIGHT
+                let height = screen_rect.height();
+                let width = height * texture_aspect;
+                let x_offset = (screen_rect.width() - width) / 2.0;
+                egui::Rect::from_min_size(screen_rect.min + egui::vec2(x_offset, 0.0), egui::vec2(width, height))
+            };
+            painter.image(texture.id(), image_rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+        }
 
         if let Ok(update) = self.update_receiver.try_recv() {
             match update {
@@ -244,6 +303,16 @@ impl eframe::App for DeepSearchApp {
                     });
                     ui.add_space(15.0);
                     
+                    ui.separator();
+                    ui.add_space(10.0);
+
+                    // --- Opacity Slider ---
+                    ui.horizontal(|ui| {
+                        ui.label("UI Opacity:");
+                        ui.add(egui::Slider::new(&mut self.background_alpha, 100..=255));
+                    });
+                    ui.add_space(10.0);
+
                     ui.separator();
                     ui.add_space(10.0);
 

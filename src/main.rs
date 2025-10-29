@@ -85,7 +85,24 @@ fn main() -> anyhow::Result<()> {
             
             cc.egui_ctx.set_fonts(fonts);
 
-            Ok(Box::new(gui::app::DeepSearchApp::default()))
+            // --- Load App State ---
+            let mut app: gui::app::DeepSearchApp = if let Some(storage) = cc.storage {
+                eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
+            } else {
+                Default::default()
+            };
+
+            // --- Load Background Texture ---
+            let texture_handle = {
+                let image_bytes = include_bytes!("../assets/background.png");
+                let image = image::load_from_memory(image_bytes).expect("Failed to load background.png");
+                let size = [image.width() as _, image.height() as _];
+                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, image.to_rgba8().as_raw());
+                cc.egui_ctx.load_texture("background", color_image, egui::TextureOptions::LINEAR)
+            };
+            app.background_texture = Some(texture_handle);
+
+            Ok(Box::new(app))
         }),
     )
     .map_err(|e| anyhow::anyhow!("Eframe error: {}", e))?;
