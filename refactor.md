@@ -9,6 +9,7 @@ Tài liệu này mô tả chi tiết kiến trúc và luồng hoạt động c�
 *   **Tối ưu hóa Quét lại (Rescan):** Triển khai logic quét lại thông minh, chỉ xử lý các tệp đã thay đổi, thêm mới hoặc bị xóa, giúp tiết kiệm thời gian và tài nguyên hệ thống.
 *   **Ứng dụng giao diện đồ họa (GUI):** Phát triển vượt kế hoạch ban đầu (một ứng dụng CLI) để xây dựng một ứng dụng GUI hoàn chỉnh, thân thiện với người dùng bằng `eframe` (egui).
 *   **Hiệu năng cao:** Duy trì và tối ưu hóa việc xử lý song song bằng `rayon` trong các tác vụ nặng (quét file, tìm kiếm), đảm bảo giao diện người dùng luôn mượt mà.
+*   **Xử lý dữ liệu lớn:** Tái cấu trúc thành công các quy trình cốt lõi (quét, quét lại, tìm kiếm) sang mô hình xử lý theo luồng (streaming) và theo lô (batching), giải quyết triệt để vấn đề tràn bộ nhớ khi làm việc với các chỉ mục hàng triệu file.
 
 ### **Công nghệ sử dụng**
 
@@ -50,7 +51,7 @@ Kiến trúc của DeepSearch được chia thành ba lớp chính: Lớp giao d
 Lớp này được triển khai trong module `src/pop` và là "bộ não" của các tác vụ xử lý.
 
 1.  **`Context` (`pop/context.rs`):** Một `struct` trung tâm chứa toàn bộ dữ liệu và trạng thái cần thiết cho một chuỗi công việc. Nó được truyền qua và chỉnh sửa bởi mỗi bước trong một workflow.
-2.  **`Process` (`pop/registry.rs`):** Một `type alias` cho một hàm độc lập, nhận vào một `Context` và trả về một `Result<Context>`. Mỗi `Process` chỉ thực hiện một nhiệm vụ duy nhất (ví dụ: `scan_directory_initial`, `write_index_to_db`).
+2.  **`Process` (`pop/registry.rs`):** Một `type alias` cho một hàm độc lập, nhận vào một `Context` và trả về một `Result<Context>`. Mỗi `Process` chỉ thực hiện một nhiệm vụ duy nhất (ví dụ: `scan_directory_streaming`, `write_index_from_stream_batched`).
 3.  **`Registry` (`pop/registry.rs`):** Một `struct` chứa `HashMap` để đăng ký và lưu trữ tất cả các `Process` và `Workflow` có sẵn trong ứng dụng.
 4.  **`Workflow`:** Một `Vec<String>` định nghĩa một chuỗi các tên của các `Process` sẽ được thực thi tuần tự.
 5.  **`Engine` (`pop/engine.rs`):** Chứa hàm `run_workflow` nhận vào tên của một `Workflow` và một `Context`, sau đó tuần tự gọi các `Process` tương ứng đã đăng ký trong `Registry` để thực thi.
@@ -73,10 +74,11 @@ Lớp này được triển khai trong module `src/pop` và là "bộ não" củ
             pub modified_time: u64,      // Thời gian sửa đổi file (dưới dạng timestamp)
         }
         ```
-*   **Đảm bảo toàn vẹn dữ liệu với Giao dịch nguyên tử (Atomic Transactions):**
-    *   Một trong những tính năng quan trọng nhất của `redb` là hỗ trợ các giao dịch ghi có tính nguyên tử (atomic).
-    *   Trong dự án, tất cả các chuỗi thao tác ghi (thêm, sửa, xóa) cho một tác vụ logic đều được gói gọn trong một giao dịch duy nhất, bắt đầu bằng `db.begin_write()?` và kết thúc bằng `txn.commit()?`.
-    *   Điều này đảm bảo nguyên tắc "tất cả hoặc không có gì": Nếu có bất kỳ lỗi nào xảy ra trước khi `commit()` được gọi, toàn bộ các thay đổi trong giao dịch đó sẽ được hủy bỏ (rollback). Cơ sở dữ liệu sẽ không bao giờ rơi vào trạng thái hỏng hoặc không nhất quán, giúp bảo vệ toàn vẹn dữ liệu chỉ mục.
+*   **Toàn vẹn dữ liệu và Xử lý Dữ liệu Lớn (Sự đánh đổi)**
+    *   Để có thể xử lý các chỉ mục cực lớn (hàng triệu file) mà không gây tràn bộ nhớ, ứng dụng sử dụng chiến lược ghi theo lô (batching).
+    *   Mỗi lô (ví dụ: 50,000 file) được ghi vào CSDL trong một **giao dịch nguyên tử (atomic transaction)** riêng biệt. `redb` đảm bảo rằng mỗi lô này sẽ được ghi một cách "tất cả hoặc không có gì".
+    *   **Sự đánh đổi:** Toàn bộ một tác vụ lớn (như "Initial Scan" hoặc "Rescan") **không phải là một giao dịch nguyên tử duy nhất**. Điều này có nghĩa là nếu ứng dụng bị sập giữa chừng, CSDL sẽ ở trạng thái "dở dang" (ví dụ: đã ghi được một nửa số file).
+    *   **Giảm thiểu rủi ro:** Trạng thái "dở dang" này không làm hỏng file CSDL. Người dùng có thể dễ dàng khắc phục bằng cách chạy lại "Initial Scan" hoặc chạy "Rescan" để CSDL tự động tìm và bổ sung các file còn thiếu. Đây là sự đánh đổi cần thiết để có được khả năng xử lý dữ liệu lớn.
 
 ### **Cấu trúc thư mục `src`**
 
@@ -106,33 +108,33 @@ src/
 
 ### **Luồng hoạt động chi tiết (Workflows)**
 
-Các workflow được định nghĩa và đăng ký trong `gui/app.rs`. Chúng được khởi chạy bởi luồng Worker khi nhận được `Command` tương ứng.
+Các workflow được định nghĩa và đăng ký trong `gui/app.rs`. Chúng được khởi chạy bởi luồng Worker khi nhận được `Command` tương ứng. Kiến trúc này xử lý dữ liệu theo luồng (streaming) để đảm bảo sử dụng bộ nhớ hiệu quả.
 
 1.  **Quét lần đầu (Initial Scan)**
     *   **Kích hoạt:** Người dùng nhập đường dẫn mới và nhấn nút "Start Initial Scan".
+    *   **Workflow:** `["scan_directory_streaming", "write_index_from_stream_batched"]`
     *   **Luồng:**
         1.  GUI gửi `Command::StartInitialScan(path)`.
-        2.  Worker nhận lệnh, tạo `Context` và chạy workflow `gui_initial_scan`: `["scan_directory_initial", "write_index_to_db"]`.
-        3.  `scan_directory_initial`: Quét toàn bộ thư mục (sử dụng chiến lược 2 giai đoạn song song) và lưu danh sách file vào `Context`. Gửi `GuiUpdate::ScanProgress` liên tục.
-        4.  `write_index_to_db`: Tạo bảng mới trong `redb` và ghi toàn bộ danh sách file từ `Context` vào đó.
-        5.  Worker gửi `GuiUpdate::ScanCompleted` khi hoàn tất.
+        2.  `scan_directory_streaming`: Chạy trong một luồng nền, quét toàn bộ thư mục và liên tục gửi dữ liệu file tìm thấy qua một `channel`. Process này hoàn thành gần như ngay lập tức, trả về `Context` chứa đầu nhận của `channel`.
+        3.  `write_index_from_stream_batched`: Nhận dữ liệu từ `channel`, gom chúng thành từng lô (batch), và ghi mỗi lô vào `redb` trong một transaction riêng.
+        4.  Worker gửi `GuiUpdate::ScanCompleted` khi hoàn tất.
 
 2.  **Quét lại (Rescan)**
     *   **Kích hoạt:** Người dùng nhấn nút "Rescan" trên một vị trí đã được index.
+    *   **Workflow:** `["find_and_apply_updates_streaming", "find_and_apply_deletions"]`
     *   **Luồng:**
         1.  GUI gửi `Command::StartRescan(path)`.
-        2.  Worker chạy workflow `gui_rescan`: `["load_existing_index", "scan_directory_incremental", "update_index_in_db"]`.
-        3.  `load_existing_index`: Đọc toàn bộ chỉ mục cũ từ `redb` vào một `HashMap` trong `Context`.
-        4.  `scan_directory_incremental`: Quét lại thư mục. So sánh từng file với `HashMap` đã tải để xác định file mới, file bị thay đổi, và file bị xóa.
-        5.  `update_index_in_db`: Ghi lại các thay đổi (thêm, sửa, xóa) vào bảng tương ứng trong `redb`.
-        6.  Worker gửi `GuiUpdate::ScanCompleted`.
+        2.  `find_and_apply_updates_streaming`: Quét hệ thống file, so sánh từng file với CSDL (dùng các truy vấn nhỏ, không tải toàn bộ CSDL). Các file mới/thay đổi được tìm thấy và ghi vào CSDL theo từng lô.
+        3.  `find_and_apply_deletions`: Sử dụng một bảng CSDL tạm để xác định các file đã bị xóa khỏi hệ thống file, sau đó thực hiện xóa chúng khỏi chỉ mục chính theo từng lô.
+        4.  Worker gửi `GuiUpdate::ScanCompleted`.
 
 3.  **Tìm kiếm (Search)**
     *   **Kích hoạt:** Người dùng nhập từ khóa, chọn phạm vi tìm kiếm và nhấn "Search" (hoặc Enter).
+    *   **Workflow:** `["search_index"]`
     *   **Luồng:**
         1.  GUI gửi `Command::StartSearch { locations, keyword }`.
-        2.  Worker chạy workflow `gui_search`: `["search_index"]`.
-        3.  `search_index`: Chuẩn hóa từ khóa. Duyệt qua các bảng dữ liệu được chọn trong `redb`, tìm kiếm song song các file có `normalized_name` chứa từ khóa.
+        2.  `search_index`: Chuẩn hóa từ khóa. Yêu cầu `DbManager` tìm kiếm.
+        3.  Bên trong `DbManager`, quá trình tìm kiếm được thực hiện song song theo luồng: nó duyệt qua CSDL trên đĩa, kiểm tra từng file, và chỉ thu thập các kết quả khớp vào bộ nhớ.
         4.  Worker gửi `GuiUpdate::SearchCompleted(results)` với danh sách kết quả.
 
 ### **Hướng dẫn bảo trì và mở rộng**

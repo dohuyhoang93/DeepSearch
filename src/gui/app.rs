@@ -66,16 +66,15 @@ impl Default for DeepSearchApp {
             let mut registry = Registry::new();
 
             // Register all processes
-            registry.register_process("scan_directory_initial", processes::scan::scan_directory_initial);
-            registry.register_process("write_index_to_db", processes::index::write_index_to_db);
-            registry.register_process("load_existing_index", processes::index::load_existing_index);
-            registry.register_process("scan_directory_incremental", processes::scan::scan_directory_incremental);
-            registry.register_process("update_index_in_db", processes::index::update_index_in_db);
+            registry.register_process("scan_directory_streaming", processes::scan::scan_directory_streaming);
+            registry.register_process("write_index_from_stream_batched", processes::index::write_index_from_stream_batched);
+            registry.register_process("find_and_apply_updates_streaming", processes::scan::find_and_apply_updates_streaming);
+            registry.register_process("find_and_apply_deletions", processes::index::find_and_apply_deletions);
             registry.register_process("search_index", processes::search::search_index);
 
             // Register GUI-specific workflows
-            registry.register_workflow("gui_initial_scan", vec!["scan_directory_initial".to_string(), "write_index_to_db".to_string()]);
-            registry.register_workflow("gui_rescan", vec!["load_existing_index".to_string(), "scan_directory_incremental".to_string(), "update_index_in_db".to_string()]);
+            registry.register_workflow("gui_initial_scan", vec!["scan_directory_streaming".to_string(), "write_index_from_stream_batched".to_string()]);
+            registry.register_workflow("gui_rescan", vec!["find_and_apply_updates_streaming".to_string(), "find_and_apply_deletions".to_string()]);
             registry.register_workflow("gui_search", vec!["search_index".to_string()]);
 
             let engine = Engine::new(registry);

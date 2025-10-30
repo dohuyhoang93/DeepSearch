@@ -1,8 +1,6 @@
-
-use redb::{Database, ReadableTable, TableDefinition};
+use redb::{Database, ReadableTable, TableDefinition, ReadTransaction, WriteTransaction};
 use serde::{Deserialize, Serialize};
 use bincode::{Decode, Encode};
-use std::collections::HashMap;
 use std::path::Path;
 use rayon::prelude::*;
 
@@ -15,7 +13,7 @@ pub struct FileMetadata {
 }
 
 pub struct DbManager {
-    db: Database,
+    pub db: Database,
 }
 
 impl DbManager {
@@ -29,24 +27,12 @@ impl DbManager {
         Ok(Self { db })
     }
 
-    pub fn read_index_for_path(&self, root_path: &str) -> anyhow::Result<HashMap<String, FileMetadata>> {
-        let table_name_opt = self.get_table_name(root_path)?;
-        if table_name_opt.is_none() {
-            return Ok(HashMap::new());
-        }
-        let table_name = table_name_opt.unwrap();
-        let table_def: TableDefinition<&str, &[u8]> = TableDefinition::new(&table_name);
-        let txn = self.db.begin_read()?;
-        let table = txn.open_table(table_def)?;
+    pub fn begin_read(&self) -> anyhow::Result<ReadTransaction> {
+        Ok(self.db.begin_read()?)
+    }
 
-        let mut map = HashMap::new();
-        for item in table.iter()?.flatten() {
-            let key = item.0.value().to_string();
-            let value_bytes = item.1.value();
-            let (value, _len): (FileMetadata, usize) = bincode::decode_from_slice(value_bytes, bincode::config::standard())?;
-            map.insert(key, value);
-        }
-        Ok(map)
+    pub fn begin_write(&self) -> anyhow::Result<WriteTransaction> {
+        Ok(self.db.begin_write()?)
     }
 
     pub fn write_index_for_path(&self, root_path: &str, files: &[(String, FileMetadata)]) -> anyhow::Result<()> {
@@ -97,6 +83,18 @@ impl DbManager {
         Ok(table.iter()?.filter_map(Result::ok).map(|(path, table_name)| (path.value().to_string(), table_name.value().to_string())).collect())
     }
 
+    pub fn get_file_metadata(&self, table_name: &str, path: &str) -> anyhow::Result<Option<FileMetadata>> {
+        let table_def: TableDefinition<&str, &[u8]> = TableDefinition::new(table_name);
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(table_def)?;
+        if let Some(data) = table.get(path)? {
+            let (metadata, _len): (FileMetadata, usize) = bincode::decode_from_slice(data.value(), bincode::config::standard())?;
+            Ok(Some(metadata))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn delete_location(&self, path_to_delete: &str) -> anyhow::Result<()> {
         let txn = self.db.begin_write()?;
         {
@@ -124,11 +122,11 @@ impl DbManager {
         let txn = self.db.begin_read()?;
         let table = txn.open_table(table_def)?;
 
-        let entries: Vec<_> = table.iter()?.filter_map(Result::ok).collect();
+        let results = table.iter()?
+            .par_bridge()
+            .filter_map(|item_result| {
+                let (key, value) = item_result.ok()?;
 
-        let results = entries
-            .par_iter()
-            .filter_map(|(key, value)| {
                 let value_bytes = value.value();
                 if let Ok((metadata, _len)) = bincode::decode_from_slice::<FileMetadata, _>(value_bytes, bincode::config::standard()) {
                     if metadata.normalized_name.contains(query) {
@@ -142,7 +140,7 @@ impl DbManager {
         Ok(results)
     }
 
-    fn get_table_name(&self, root_path: &str) -> anyhow::Result<Option<String>> {
+    pub fn get_table_name(&self, root_path: &str) -> anyhow::Result<Option<String>> {
         let txn = self.db.begin_read()?;
         let locations_table = txn.open_table(LOCATIONS_TABLE)?;
         Ok(locations_table.get(root_path)?.map(|name| name.value().to_string()))
