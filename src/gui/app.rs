@@ -398,94 +398,90 @@ impl eframe::App for DeepSearchApp {
 impl DeepSearchApp {
     fn draw_indexing_tab(&mut self, ui: &mut egui::Ui) {
         ui.add_enabled_ui(!self.is_running_task, |ui| {
-            egui::Frame::group(ui.style()).show(ui, |ui| {
-                egui::Grid::new("indexing_grid").num_columns(2).spacing([10.0, 10.0]).show(ui, |ui|{
-                    ui.label(egui::RichText::new("Initial Scan").strong());
-                    ui.end_row();
+            egui::Grid::new("indexing_grid").num_columns(2).spacing([10.0, 10.0]).show(ui, |ui|{
+                ui.label(egui::RichText::new("Initial Scan").strong());
+                ui.end_row();
 
-                    ui.label("New Folder Path:");
-                    ui.horizontal(|ui| {
-                        let text_edit = egui::TextEdit::singleline(&mut self.target_path_input).hint_text("C:\\Users\\YourUser\\Documents");
-                        ui.add(text_edit);
+                ui.label("New Folder Path:");
+                ui.horizontal(|ui| {
+                    let text_edit = egui::TextEdit::singleline(&mut self.target_path_input).hint_text("C:\\Users\\YourUser\\Documents");
+                    ui.add(text_edit);
 
-                        if ui.button("Browse...").clicked() {
-                            if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                                self.target_path_input = path.display().to_string();
-                            }
-                        }
-                    });
-                    ui.end_row();
-
-                    ui.label("");
-                    if ui.button("Start Initial Scan").clicked() {
-                        if !self.target_path_input.is_empty() {
-                            self.is_running_task = true;
-                            self.search_results.clear();
-                            self.current_status = "Requesting scan...".to_string();
-                            self.command_sender.send(Command::StartInitialScan(self.target_path_input.clone().into())).unwrap();
-                        } else {
-                            self.current_status = "Please enter a path to scan.".to_string();
+                    if ui.button("Browse...").clicked() {
+                        if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                            self.target_path_input = path.display().to_string();
                         }
                     }
-                    ui.end_row();
                 });
+                ui.end_row();
+
+                ui.label("");
+                if ui.button("Start Initial Scan").clicked() {
+                    if !self.target_path_input.is_empty() {
+                        self.is_running_task = true;
+                        self.search_results.clear();
+                        self.current_status = "Requesting scan...".to_string();
+                        self.command_sender.send(Command::StartInitialScan(self.target_path_input.clone().into())).unwrap();
+                    } else {
+                        self.current_status = "Please enter a path to scan.".to_string();
+                    }
+                }
+                ui.end_row();
             });
         });
         
-        ui.separator();
-
-                egui::Frame::group(ui.style()).show(ui, |ui| {
-
-                    ui.label(egui::RichText::new("Manage Indexed Locations").strong());
-
-                    if ui.button("Refresh").clicked() && !self.is_running_task {
-
-                        self.current_status = "Fetching locations...".to_string();
-
-                        self.command_sender.send(Command::FetchLocations).unwrap();
-
-                    }
-
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-
-                        for (path, _, count) in self.locations.clone() {
-
-                            let label_text = format!("{} ({} files)", path, count);
-
-                            ui.horizontal(|ui| {
-
-                                let _ = ui.selectable_label(false, label_text);
-
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-
-                                    if ui.button("🗑 Delete").clicked() {
-
-                                        self.confirming_delete = Some(path.clone());
-
-                                    }
-
-                                    if ui.button("🔄 Rescan").clicked() {
-
-                                        self.is_running_task = true;
-
-                                        self.search_results.clear();
-
-                                        self.current_status = "Requesting rescan...".to_string();
-
-                                        self.command_sender.send(Command::StartRescan(path.clone())).unwrap();
-
-                                    }
-
-                                });
-
+                ui.separator();
+        
+        
+        
+                ui.label(egui::RichText::new("Manage Indexed Locations").strong());
+        
+                if ui.button("Refresh").clicked() && !self.is_running_task {
+        
+                    self.current_status = "Fetching locations...".to_string();
+        
+                    self.command_sender.send(Command::FetchLocations).unwrap();
+        
+                }
+        
+                egui::ScrollArea::vertical().show(ui, |ui| {
+        
+                    for (path, _, count) in self.locations.clone() {
+        
+                        let label_text = format!("{} ({} files)", path, count);
+        
+                        ui.horizontal(|ui| {
+        
+                            let _ = ui.selectable_label(false, label_text);
+        
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        
+                                if ui.button("🗑 Delete").clicked() {
+        
+                                    self.confirming_delete = Some(path.clone());
+        
+                                }
+        
+                                if ui.button("🔄 Rescan").clicked() {
+        
+                                    self.is_running_task = true;
+        
+                                    self.search_results.clear();
+        
+                                    self.current_status = "Requesting rescan...".to_string();
+        
+                                    self.command_sender.send(Command::StartRescan(path.clone())).unwrap();
+        
+                                }
+        
                             });
-
-                            ui.separator();
-
-                        }
-
-                    });
-
+        
+                        });
+        
+                        ui.separator();
+        
+                    }
+        
                 });
     }
 
