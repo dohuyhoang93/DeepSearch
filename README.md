@@ -82,6 +82,48 @@ To remove a location and its index from the database:
 
 ---
 
+## Building and Packaging
+
+To compile the application from source, you will need the [Rust toolchain](https://www.rust-lang.org/tools/install) installed.
+
+First, build the release binary:
+```sh
+cargo build --release
+```
+
+After the build is complete, follow the platform-specific instructions below to create a distributable package.
+
+### Windows
+
+No further steps are required. The build process automatically embeds the application icon. The final executable can be found at `target/release/DeepSearch.exe`.
+
+### Linux
+
+The project includes a script to install the application and integrate it with the desktop environment.
+
+1.  Navigate to the packaging directory:
+    ```sh
+    cd packaging/linux
+    ```
+2.  Run the installation script with root privileges:
+    ```sh
+    sudo ./install.sh
+    ```
+    This will copy the binary, icon, and `.desktop` file to the appropriate system directories. DeepSearch will then appear in your application menu.
+
+### macOS
+
+The project includes a script to create a standard `.app` bundle.
+
+1.  From the project root directory, run the packaging script:
+    ```sh
+    ./packaging/macos/package_macos.sh
+    ```
+2.  The script will create a `DeepSearch.app` bundle inside the `target/release/` directory.
+3.  You can then drag `DeepSearch.app` to your `/Applications` folder.
+
+---
+
 ## Development Roadmap
 
 Planned enhancements for future versions:

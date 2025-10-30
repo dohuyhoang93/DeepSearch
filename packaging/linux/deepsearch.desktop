@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=DeepSearch
+Comment=High-performance file search and indexing
+Exec=deepsearch
+Icon=deepsearch
+Categories=Utility;
+Terminal=false
