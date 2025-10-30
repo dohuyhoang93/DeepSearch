@@ -1,4 +1,4 @@
-use redb::{Database, ReadableTable, TableDefinition, ReadTransaction, WriteTransaction};
+use redb::{Database, ReadableTable, ReadableTableMetadata, TableDefinition, ReadTransaction, WriteTransaction};
 use serde::{Deserialize, Serialize};
 use bincode::{Decode, Encode};
 use std::path::Path;
@@ -93,6 +93,26 @@ impl DbManager {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn get_table_len(&self, table_name: &str) -> anyhow::Result<u64> {
+        let table_def: TableDefinition<&str, &[u8]> = TableDefinition::new(table_name);
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(table_def)?;
+        Ok(table.len()?)
+    }
+
+    pub fn write_paths_to_table(&self, table_name: &str, paths: &[String]) -> anyhow::Result<()> {
+        let table_def: TableDefinition<&str, &[u8]> = TableDefinition::new(table_name);
+        let txn = self.db.begin_write()?;
+        {
+            let mut table = txn.open_table(table_def)?;
+            for path in paths {
+                table.insert(path.as_str(), &[] as &[u8])?;
+            }
+        }
+        txn.commit()?;
+        Ok(())
     }
 
     pub fn delete_location(&self, path_to_delete: &str) -> anyhow::Result<()> {

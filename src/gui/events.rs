@@ -19,7 +19,7 @@ pub enum Command {
 /// Updates sent from the Worker thread back to the GUI thread.
 #[derive(Debug)]
 pub enum GuiUpdate {
-    LocationsFetched(Vec<(String, String)>),
+    LocationsFetched(Vec<(String, String, u64)>), // (path, table_name, count)
     ScanProgress(f32, String), // Progress percentage and a message
     ScanCompleted(usize),      // Number of files indexed
     SearchCompleted(Vec<String>),

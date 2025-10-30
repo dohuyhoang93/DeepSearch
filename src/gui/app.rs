@@ -45,12 +45,12 @@ pub struct DeepSearchApp {
     #[serde(skip)]
     show_about_window: bool,
     #[serde(skip)]
-    pub background_texture: Option<egui::TextureHandle>,
-    #[serde(skip)]
-    locations: Vec<(String, String)>,
-    #[serde(skip)]
-    search_keyword: String,
-    #[serde(skip)]
+        pub background_texture: Option<egui::TextureHandle>,
+        #[serde(skip)]
+        locations: Vec<(String, String, u64)>,
+        #[serde(skip)]
+        search_keyword: String,
+        #[serde(skip)]
     search_scope: HashMap<String, bool>,
     #[serde(skip)]
     search_results: Vec<String>,
@@ -68,13 +68,12 @@ impl Default for DeepSearchApp {
             // Register all processes
             registry.register_process("scan_directory_streaming", processes::scan::scan_directory_streaming);
             registry.register_process("write_index_from_stream_batched", processes::index::write_index_from_stream_batched);
-            registry.register_process("find_and_apply_updates_streaming", processes::scan::find_and_apply_updates_streaming);
-            registry.register_process("find_and_apply_deletions", processes::index::find_and_apply_deletions);
+            registry.register_process("rescan_unified_streaming", processes::scan::rescan_unified_streaming);
             registry.register_process("search_index", processes::search::search_index);
 
             // Register GUI-specific workflows
             registry.register_workflow("gui_initial_scan", vec!["scan_directory_streaming".to_string(), "write_index_from_stream_batched".to_string()]);
-            registry.register_workflow("gui_rescan", vec!["find_and_apply_updates_streaming".to_string(), "find_and_apply_deletions".to_string()]);
+            registry.register_workflow("gui_rescan", vec!["rescan_unified_streaming".to_string()]);
             registry.register_workflow("gui_search", vec!["search_index".to_string()]);
 
             let engine = Engine::new(registry);
@@ -92,7 +91,12 @@ impl Default for DeepSearchApp {
                     Command::FetchLocations => {
                         if let Ok(db_manager) = DbManager::new(&db_path) {
                             if let Ok(locations) = db_manager.get_all_locations() {
-                                update_sender.send(GuiUpdate::LocationsFetched(locations)).unwrap();
+                                let mut locations_with_counts = Vec::new();
+                                for (path, table_name) in locations {
+                                    let count = db_manager.get_table_len(&table_name).unwrap_or(0);
+                                    locations_with_counts.push((path, table_name, count));
+                                }
+                                update_sender.send(GuiUpdate::LocationsFetched(locations_with_counts)).unwrap();
                             }
                         }
                     }
@@ -236,7 +240,7 @@ impl eframe::App for DeepSearchApp {
             match update {
                 GuiUpdate::LocationsFetched(locations) => {
                     self.locations = locations;
-                    self.search_scope = self.locations.iter().map(|(path, _)| (path.clone(), true)).collect();
+                    self.search_scope = self.locations.iter().map(|(path, _, _)| (path.clone(), true)).collect();
                     self.current_status = "Ready.".to_string();
                 }
                 GuiUpdate::ScanProgress(progress, message) => {
@@ -364,6 +368,7 @@ impl eframe::App for DeepSearchApp {
             ui.horizontal(|ui| {
                 ui.label(&self.current_status);
                 if self.is_running_task {
+                    ui.add(egui::Spinner::new());
                     ui.add(egui::ProgressBar::new(self.scan_progress).show_percentage());
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -393,64 +398,95 @@ impl eframe::App for DeepSearchApp {
 impl DeepSearchApp {
     fn draw_indexing_tab(&mut self, ui: &mut egui::Ui) {
         ui.add_enabled_ui(!self.is_running_task, |ui| {
-            egui::Grid::new("indexing_grid").num_columns(2).spacing([10.0, 10.0]).show(ui, |ui|{
-                ui.label(egui::RichText::new("Initial Scan").strong());
-                ui.end_row();
+            egui::Frame::group(ui.style()).show(ui, |ui| {
+                egui::Grid::new("indexing_grid").num_columns(2).spacing([10.0, 10.0]).show(ui, |ui|{
+                    ui.label(egui::RichText::new("Initial Scan").strong());
+                    ui.end_row();
 
-                ui.label("New Folder Path:");
-                ui.horizontal(|ui| {
-                    let text_edit = egui::TextEdit::singleline(&mut self.target_path_input).hint_text("C:\\Users\\YourUser\\Documents");
-                    ui.add(text_edit);
+                    ui.label("New Folder Path:");
+                    ui.horizontal(|ui| {
+                        let text_edit = egui::TextEdit::singleline(&mut self.target_path_input).hint_text("C:\\Users\\YourUser\\Documents");
+                        ui.add(text_edit);
 
-                    if ui.button("Browse...").clicked() {
-                        if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                            self.target_path_input = path.display().to_string();
+                        if ui.button("Browse...").clicked() {
+                            if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                                self.target_path_input = path.display().to_string();
+                            }
+                        }
+                    });
+                    ui.end_row();
+
+                    ui.label("");
+                    if ui.button("Start Initial Scan").clicked() {
+                        if !self.target_path_input.is_empty() {
+                            self.is_running_task = true;
+                            self.search_results.clear();
+                            self.current_status = "Requesting scan...".to_string();
+                            self.command_sender.send(Command::StartInitialScan(self.target_path_input.clone().into())).unwrap();
+                        } else {
+                            self.current_status = "Please enter a path to scan.".to_string();
                         }
                     }
+                    ui.end_row();
                 });
-                ui.end_row();
-
-                ui.label("");
-                if ui.button("Start Initial Scan").clicked() {
-                    if !self.target_path_input.is_empty() {
-                        self.is_running_task = true;
-                        self.search_results.clear();
-                        self.current_status = "Requesting scan...".to_string();
-                        self.command_sender.send(Command::StartInitialScan(self.target_path_input.clone().into())).unwrap();
-                    } else {
-                        self.current_status = "Please enter a path to scan.".to_string();
-                    }
-                }
-                ui.end_row();
             });
         });
         
         ui.separator();
 
-        ui.label(egui::RichText::new("Manage Indexed Locations").strong());
-        if ui.button("Refresh").clicked() && !self.is_running_task {
-            self.current_status = "Fetching locations...".to_string();
-            self.command_sender.send(Command::FetchLocations).unwrap();
-        }
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            for (path, _) in self.locations.clone() {
-                ui.horizontal(|ui| {
-                    ui.label(&path);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("🗑 Delete").clicked() {
-                            self.confirming_delete = Some(path.clone());
+                egui::Frame::group(ui.style()).show(ui, |ui| {
+
+                    ui.label(egui::RichText::new("Manage Indexed Locations").strong());
+
+                    if ui.button("Refresh").clicked() && !self.is_running_task {
+
+                        self.current_status = "Fetching locations...".to_string();
+
+                        self.command_sender.send(Command::FetchLocations).unwrap();
+
+                    }
+
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+
+                        for (path, _, count) in self.locations.clone() {
+
+                            let label_text = format!("{} ({} files)", path, count);
+
+                            ui.horizontal(|ui| {
+
+                                let _ = ui.selectable_label(false, label_text);
+
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+
+                                    if ui.button("🗑 Delete").clicked() {
+
+                                        self.confirming_delete = Some(path.clone());
+
+                                    }
+
+                                    if ui.button("🔄 Rescan").clicked() {
+
+                                        self.is_running_task = true;
+
+                                        self.search_results.clear();
+
+                                        self.current_status = "Requesting rescan...".to_string();
+
+                                        self.command_sender.send(Command::StartRescan(path.clone())).unwrap();
+
+                                    }
+
+                                });
+
+                            });
+
+                            ui.separator();
+
                         }
-                        if ui.button("🔄 Rescan").clicked() {
-                            self.is_running_task = true;
-                            self.search_results.clear();
-                            self.current_status = "Requesting rescan...".to_string();
-                            self.command_sender.send(Command::StartRescan(path.clone())).unwrap();
-                        }
+
                     });
+
                 });
-                ui.separator();
-            }
-        });
     }
 
     fn draw_search_tab(&mut self, ui: &mut egui::Ui) {
@@ -458,6 +494,7 @@ impl DeepSearchApp {
         ui.add_enabled_ui(!self.is_running_task, |ui| {
             ui.horizontal(|ui| {
                 ui.label("Keyword:");
+                ui.label("🔍"); // Search icon
                 let response = ui.text_edit_singleline(&mut self.search_keyword);
                 if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     self.trigger_search();
@@ -480,7 +517,7 @@ impl DeepSearchApp {
                 ui.add_enabled_ui(!self.is_running_task, |ui| {
                     ui.label(egui::RichText::new("Search In:").strong());
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        for (path, _) in &self.locations {
+                        for (path, _, _) in &self.locations {
                             if let Some(is_selected) = self.search_scope.get_mut(path) {
                                 ui.checkbox(is_selected, path);
                             }
@@ -491,31 +528,44 @@ impl DeepSearchApp {
 
         egui::CentralPanel::default().show_inside(ui, |ui| {
             ui.label(egui::RichText::new("Results:").strong());
-            let text_height = ui.text_style_height(&egui::TextStyle::Body);
-            egui::ScrollArea::vertical().show_rows(ui, text_height, self.search_results.len(), |ui, row_range| {
-                for i in row_range {
-                    if let Some(result) = self.search_results.get(i) {
-                        let response = ui.label(result);
-                        response.context_menu(|ui| {
-                            if ui.button("Open File").clicked() {
-                                self.command_sender.send(Command::OpenFile(result.clone())).unwrap();
-                                ui.close();
-                            }
-                            if ui.button("Open File Location").clicked() {
-                                self.command_sender.send(Command::OpenLocation(result.clone())).unwrap();
-                                ui.close();
-                            }
-                        });
+
+            if self.search_results.is_empty() && !self.is_running_task {
+                ui.add_space(10.0);
+                ui.vertical_centered(|ui| {
+                    if self.search_keyword.is_empty() {
+                        ui.label("Enter a keyword to begin searching.");
+                    } else {
+                        ui.label(format!("No results found for '{}'", self.search_keyword));
                     }
-                }
-            });
+                });
+            } else {
+                let text_height = ui.text_style_height(&egui::TextStyle::Body);
+                egui::ScrollArea::vertical().show_rows(ui, text_height, self.search_results.len(), |ui, row_range| {
+                    for i in row_range {
+                        if let Some(result) = self.search_results.get(i) {
+                                                    let icon = DeepSearchApp::get_icon_for_path(result);
+                                                    let display_text = format!("{} {}", icon, result);
+                                                    let response = ui.selectable_label(false, display_text);
+                                                    response.context_menu(|ui| {                                if ui.button("Open File").clicked() {
+                                    self.command_sender.send(Command::OpenFile(result.clone())).unwrap();
+                                    ui.close();
+                                }
+                                if ui.button("Open File Location").clicked() {
+                                    self.command_sender.send(Command::OpenLocation(result.clone())).unwrap();
+                                    ui.close();
+                                }
+                            });
+                        }
+                    }
+                });
+            }
         });
     }
 
     fn trigger_search(&mut self) {
         if !self.search_keyword.is_empty() {
             let selected_locations: Vec<_> = self.locations.iter()
-                .filter(|(path, _)| *self.search_scope.get(path).unwrap_or(&false))
+                .filter(|(path, _, _)| *self.search_scope.get(path).unwrap_or(&false))
                 .cloned()
                 .collect();
             
@@ -523,11 +573,35 @@ impl DeepSearchApp {
                 self.is_running_task = true;
                 self.search_results.clear();
                 self.current_status = "Requesting search...".to_string();
-                self.command_sender.send(Command::StartSearch { locations: selected_locations, keyword: self.search_keyword.clone() }).unwrap();
+                let locations_for_search: Vec<_> = selected_locations.iter()
+                    .map(|(path, table_name, _)| (path.clone(), table_name.clone()))
+                    .collect();
+                self.command_sender.send(Command::StartSearch { locations: locations_for_search, keyword: self.search_keyword.clone() }).unwrap();
             } else {
                 self.current_status = "Please select at least one location to search in.".to_string();
             }
         }
     }
-}
 
+    // Helper to get an icon based on file extension
+    fn get_icon_for_path(path: &str) -> &'static str {
+        let path_buf = PathBuf::from(path);
+        if path_buf.is_dir() {
+            return "📁"; // Folder icon
+        }
+        match path_buf.extension().and_then(|s| s.to_str()) {
+            Some("txt") | Some("md") | Some("log") => "📄", // Text file
+            Some("pdf") => "📃", // PDF
+            Some("doc") | Some("docx") => "📝", // Word document
+            Some("xls") | Some("xlsx") | Some("csv") => "📊", // Spreadsheet
+            Some("ppt") | Some("pptx") => " presentation", // Presentation
+            Some("zip") | Some("rar") | Some("7z") | Some("tar") | Some("gz") => "📦", // Archive
+            Some("jpg") | Some("jpeg") | Some("png") | Some("gif") | Some("bmp") | Some("svg") => "🖼️", // Image
+            Some("mp3") | Some("wav") | Some("flac") | Some("ogg") => "🎵", // Audio
+            Some("mp4") | Some("mkv") | Some("avi") | Some("mov") => "🎬", // Video
+            Some("exe") | Some("dll") | Some("bin") => "⚙️", // Executable/Binary
+            Some("rs") | Some("py") | Some("js") | Some("html") | Some("css") | Some("json") | Some("xml") => "💻", // Code
+            _ => "🗄️", // Generic file
+        }
+    }
+}
