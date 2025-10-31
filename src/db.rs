@@ -84,6 +84,12 @@ impl DbManager {
         let txn = self.db.begin_read()?;
         let table = txn.open_table(table_def)?;
 
+        // Token-based search: split the query into words
+        let query_tokens: Vec<&str> = query.split_whitespace().collect();
+        if query_tokens.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let results = table.iter()?
             .par_bridge()
             .filter_map(|item_result| {
@@ -91,7 +97,8 @@ impl DbManager {
 
                 let value_bytes = value.value();
                 if let Ok((metadata, _len)) = bincode::decode_from_slice::<FileMetadata, _>(value_bytes, bincode::config::standard()) {
-                    if metadata.normalized_name.contains(query) {
+                    // Check if all tokens are present in the normalized name
+                    if query_tokens.iter().all(|token| metadata.normalized_name.contains(token)) {
                         return Some(key.value().to_string());
                     }
                 }
