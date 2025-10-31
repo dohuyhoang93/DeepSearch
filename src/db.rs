@@ -1,4 +1,4 @@
-use redb::{Database, ReadableTable, ReadableTableMetadata, TableDefinition, ReadTransaction, WriteTransaction};
+use redb::{Database, ReadableTable, ReadableTableMetadata, TableDefinition};
 use serde::{Deserialize, Serialize};
 use bincode::{Decode, Encode};
 use std::path::Path;
@@ -27,14 +27,6 @@ impl DbManager {
         Ok(Self { db })
     }
 
-    pub fn begin_read(&self) -> anyhow::Result<ReadTransaction> {
-        Ok(self.db.begin_read()?)
-    }
-
-    pub fn begin_write(&self) -> anyhow::Result<WriteTransaction> {
-        Ok(self.db.begin_write()?)
-    }
-
     pub fn write_index_for_path(&self, root_path: &str, files: &[(String, FileMetadata)]) -> anyhow::Result<()> {
         let table_name = self.get_or_create_table_name(root_path)?;
         let table_def: TableDefinition<&str, &[u8]> = TableDefinition::new(&table_name);
@@ -52,47 +44,10 @@ impl DbManager {
         Ok(())
     }
 
-    pub fn update_index_for_path(
-        &self,
-        root_path: &str,
-        updates: &[(String, FileMetadata)],
-        deletes: &[String],
-    ) -> anyhow::Result<()> {
-        let table_name = self.get_or_create_table_name(root_path)?;
-        let table_def: TableDefinition<&str, &[u8]> = TableDefinition::new(&table_name);
-
-        let txn = self.db.begin_write()?;
-        {
-            let mut table = txn.open_table(table_def)?;
-            for path in deletes {
-                table.remove(path.as_str())?;
-            }
-            for (path, metadata) in updates {
-                let key = path.as_str();
-                let value = bincode::encode_to_vec(metadata, bincode::config::standard())?;
-                table.insert(key, &value[..])?;
-            }
-        }
-        txn.commit()?;
-        Ok(())
-    }
-
     pub fn get_all_locations(&self) -> anyhow::Result<Vec<(String, String)>> {
         let txn = self.db.begin_read()?;
         let table = txn.open_table(LOCATIONS_TABLE)?;
         Ok(table.iter()?.filter_map(Result::ok).map(|(path, table_name)| (path.value().to_string(), table_name.value().to_string())).collect())
-    }
-
-    pub fn get_file_metadata(&self, table_name: &str, path: &str) -> anyhow::Result<Option<FileMetadata>> {
-        let table_def: TableDefinition<&str, &[u8]> = TableDefinition::new(table_name);
-        let txn = self.db.begin_read()?;
-        let table = txn.open_table(table_def)?;
-        if let Some(data) = table.get(path)? {
-            let (metadata, _len): (FileMetadata, usize) = bincode::decode_from_slice(data.value(), bincode::config::standard())?;
-            Ok(Some(metadata))
-        } else {
-            Ok(None)
-        }
     }
 
     pub fn get_table_len(&self, table_name: &str) -> anyhow::Result<u64> {
@@ -100,19 +55,6 @@ impl DbManager {
         let txn = self.db.begin_read()?;
         let table = txn.open_table(table_def)?;
         Ok(table.len()?)
-    }
-
-    pub fn write_paths_to_table(&self, table_name: &str, paths: &[String]) -> anyhow::Result<()> {
-        let table_def: TableDefinition<&str, &[u8]> = TableDefinition::new(table_name);
-        let txn = self.db.begin_write()?;
-        {
-            let mut table = txn.open_table(table_def)?;
-            for path in paths {
-                table.insert(path.as_str(), &[] as &[u8])?;
-            }
-        }
-        txn.commit()?;
-        Ok(())
     }
 
     pub fn delete_location(&self, path_to_delete: &str) -> anyhow::Result<()> {
@@ -194,5 +136,22 @@ impl DbManager {
             return Ok(name);
         }
         self.create_table_name(root_path)
+    }
+
+    pub fn swap_location_table(&self, root_path: &str, new_table_name: &str) -> anyhow::Result<String> {
+        let txn = self.db.begin_write()?;
+        let old_table_name;
+        {
+            let mut locations_table = txn.open_table(LOCATIONS_TABLE)?;
+            // Get the old table name
+            old_table_name = locations_table.get(root_path)?
+                .map(|guard| guard.value().to_string())
+                .ok_or_else(|| anyhow::anyhow!("Could not find old table name for location '{}'", root_path))?;
+
+            // Point the location to the new table
+            locations_table.insert(root_path, new_table_name)?;
+        }
+        txn.commit()?;
+        Ok(old_table_name)
     }
 }

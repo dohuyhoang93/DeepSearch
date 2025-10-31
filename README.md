@@ -21,7 +21,7 @@ It builds a fast, searchable index of your local folders and network shared dire
 - **Modern & Responsive GUI**: A clean and intuitive graphical user interface built with `eframe` (egui).
 - **Light & Dark Modes**: Toggle between light and dark themes to suit your preference.
 - **Persistent Indexing**: Uses a local `redb` database to store file indexes, allowing for fast subsequent searches without needing to re-scan entire directories.
-- **Incremental Updates**: A "Rescan" feature intelligently compares directories against the existing index to find and apply only the changes (new, modified, or deleted files).
+- **Incremental Updates**: A "Rescan" feature efficiently rebuilds the index for a location in the background. Once complete, it atomically swaps the old index for the new one, ensuring data consistency and high performance.
 - **Optimized for Performance**: Leverages Rust’s concurrency model (`rayon`) for both indexing and searching to maximize throughput and keep the UI responsive.
 - **Intelligent Search**: File name search is insensitive to case and diacritics (e.g., `thanh` will match `Thành`).
 - **Cross-Platform**: Runs on Windows, macOS, and Linux.
@@ -71,7 +71,7 @@ If the contents of an indexed directory have changed, run a Rescan to efficientl
 
 1.  On the **Indexing** tab, find the location you want to update in the "Manage Indexed Locations" list.
 2.  Click the **"🔄 Rescan"** button next to its path.
-3.  The application will re-scan the directory, compare it with the old index, and save only the changes.
+3. The application will perform a full, efficient rescan of the directory in the background. Once finished, the new index will instantly and safely replace the old one.
 
 ### 4. Deleting an Index
 

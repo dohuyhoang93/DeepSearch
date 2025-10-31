@@ -6,7 +6,7 @@ Tài liệu này mô tả chi tiết kiến trúc và luồng hoạt động c�
 
 *   **Kiến trúc Module hóa:** Tái cấu trúc thành công mã nguồn thành các module riêng biệt, linh hoạt theo mô hình Hướng quy trình (POP), giúp dễ quản lý và mở rộng.
 *   **Hệ thống chỉ mục hiệu năng cao:** Tích hợp thành công cơ sở dữ liệu `redb` để xây dựng và quản lý chỉ mục, cho phép tìm kiếm gần như tức thì trên hàng triệu tệp.
-*   **Tối ưu hóa Quét lại (Rescan):** Triển khai logic quét lại thông minh, chỉ xử lý các tệp đã thay đổi, thêm mới hoặc bị xóa, giúp tiết kiệm thời gian và tài nguyên hệ thống.
+*   **Tối ưu hóa Quét lại (Rescan):** Tái cấu trúc lại hoàn toàn quy trình "Rescan" theo mô hình "tạo-và-hoán đổi" (create-and-swap) lấy cảm hứng từ ZFS. Quy trình mới tạo một chỉ mục mới hoàn toàn trong nền, sau đó hoán đổi nó một cách nguyên tử (atomic swap) với chỉ mục cũ, giúp tăng cường hiệu năng, độ an toàn dữ liệu và đơn giản hóa mã nguồn.
 *   **Ứng dụng giao diện đồ họa (GUI):** Phát triển vượt kế hoạch ban đầu (một ứng dụng CLI) để xây dựng một ứng dụng GUI hoàn chỉnh, thân thiện với người dùng bằng `eframe` (egui).
 *   **Hiệu năng cao:** Duy trì và tối ưu hóa việc xử lý song song bằng `rayon` trong các tác vụ nặng (quét file, tìm kiếm), đảm bảo giao diện người dùng luôn mượt mà.
 *   **Xử lý dữ liệu lớn:** Tái cấu trúc thành công các quy trình cốt lõi (quét, quét lại, tìm kiếm) sang mô hình xử lý theo luồng (streaming) và theo lô (batching), giải quyết triệt để vấn đề tràn bộ nhớ khi làm việc với các chỉ mục hàng triệu file.
@@ -119,14 +119,15 @@ Các workflow được định nghĩa và đăng ký trong `gui/app.rs`. Chúng 
         3.  `write_index_from_stream_batched`: Nhận dữ liệu từ `channel`, gom chúng thành từng lô (batch), và ghi mỗi lô vào `redb` trong một transaction riêng.
         4.  Worker gửi `GuiUpdate::ScanCompleted` khi hoàn tất.
 
-2.  **Quét lại (Rescan)**
+2.  **Quét lại (Rescan) với Atomic Swap**
     *   **Kích hoạt:** Người dùng nhấn nút "Rescan" trên một vị trí đã được index.
-    *   **Workflow:** `["find_and_apply_updates_streaming", "find_and_apply_deletions"]`
+    *   **Workflow:** `["rescan_atomic_swap"]`
     *   **Luồng:**
         1.  GUI gửi `Command::StartRescan(path)`.
-        2.  `find_and_apply_updates_streaming`: Quét hệ thống file, so sánh từng file với CSDL (dùng các truy vấn nhỏ, không tải toàn bộ CSDL). Các file mới/thay đổi được tìm thấy và ghi vào CSDL theo từng lô.
-        3.  `find_and_apply_deletions`: Sử dụng một bảng CSDL tạm để xác định các file đã bị xóa khỏi hệ thống file, sau đó thực hiện xóa chúng khỏi chỉ mục chính theo từng lô.
-        4.  Worker gửi `GuiUpdate::ScanCompleted`.
+        2.  `rescan_atomic_swap`: Process này thực hiện toàn bộ logic một cách tuần tự:
+            *   **Pha 1 (Build):** Tạo một bảng chỉ mục mới hoàn toàn trong CSDL. Quét lại toàn bộ hệ thống file và ghi dữ liệu vào bảng mới này theo từng lô.
+            *   **Pha 2 (Swap & Cleanup):** Sau khi bảng mới được tạo xong, gọi `DbManager::swap_location_table` để cập nhật con trỏ trong bảng `locations` trỏ tới bảng mới, đồng thời lấy về tên bảng cũ. Ngay sau đó, thực hiện xóa toàn bộ bảng cũ.
+        3.  Worker gửi `GuiUpdate::ScanCompleted` khi hoàn tất.
 
 3.  **Tìm kiếm (Search)**
     *   **Kích hoạt:** Người dùng nhập từ khóa, chọn phạm vi tìm kiếm và nhấn "Search" (hoặc Enter).

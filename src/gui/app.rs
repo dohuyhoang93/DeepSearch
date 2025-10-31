@@ -68,12 +68,12 @@ impl Default for DeepSearchApp {
             // Register all processes
             registry.register_process("scan_directory_streaming", processes::scan::scan_directory_streaming);
             registry.register_process("write_index_from_stream_batched", processes::index::write_index_from_stream_batched);
-            registry.register_process("rescan_unified_streaming", processes::scan::rescan_unified_streaming);
+            registry.register_process("rescan_atomic_swap", processes::scan::rescan_atomic_swap);
             registry.register_process("search_index", processes::search::search_index);
 
             // Register GUI-specific workflows
             registry.register_workflow("gui_initial_scan", vec!["scan_directory_streaming".to_string(), "write_index_from_stream_batched".to_string()]);
-            registry.register_workflow("gui_rescan", vec!["rescan_unified_streaming".to_string()]);
+            registry.register_workflow("gui_rescan", vec!["rescan_atomic_swap".to_string()]);
             registry.register_workflow("gui_search", vec!["search_index".to_string()]);
 
             let engine = Engine::new(registry);
