@@ -17,6 +17,5 @@ pub struct Context {
 
     // --- Data for Search ---
     pub search_keyword: Option<String>,
-    pub search_results: Vec<String>,
     pub search_locations: Vec<(String, String)>, // (location_path, table_name)
 }

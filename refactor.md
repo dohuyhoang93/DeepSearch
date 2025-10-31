@@ -10,6 +10,7 @@ Tài liệu này mô tả chi tiết kiến trúc và luồng hoạt động c�
 *   **Ứng dụng giao diện đồ họa (GUI):** Phát triển vượt kế hoạch ban đầu (một ứng dụng CLI) để xây dựng một ứng dụng GUI hoàn chỉnh, thân thiện với người dùng bằng `eframe` (egui).
 *   **Hiệu năng cao:** Duy trì và tối ưu hóa việc xử lý song song bằng `rayon` trong các tác vụ nặng (quét file, tìm kiếm), đảm bảo giao diện người dùng luôn mượt mà.
 *   **Xử lý dữ liệu lớn:** Tái cấu trúc thành công các quy trình cốt lõi (quét, quét lại, tìm kiếm) sang mô hình xử lý theo luồng (streaming) và theo lô (batching), giải quyết triệt để vấn đề tràn bộ nhớ khi làm việc với các chỉ mục hàng triệu file.
+*   **Tối ưu hóa hiển thị danh sách lớn:** Triển khai thuật toán cắt ngắn chuỗi (truncation) thông minh và cơ chế caching dữ liệu hiển thị (`DisplayResult`), đảm bảo việc cuộn qua hàng chục nghìn kết quả vẫn mượt mà, không bị lag.
 
 ### **Công nghệ sử dụng**
 
@@ -129,14 +130,14 @@ Các workflow được định nghĩa và đăng ký trong `gui/app.rs`. Chúng 
             *   **Pha 2 (Swap & Cleanup):** Sau khi bảng mới được tạo xong, gọi `DbManager::swap_location_table` để cập nhật con trỏ trong bảng `locations` trỏ tới bảng mới, đồng thời lấy về tên bảng cũ. Ngay sau đó, thực hiện xóa toàn bộ bảng cũ.
         3.  Worker gửi `GuiUpdate::ScanCompleted` khi hoàn tất.
 
-3.  **Tìm kiếm (Search)**
-    *   **Kích hoạt:** Người dùng nhập từ khóa, chọn phạm vi tìm kiếm và nhấn "Search" (hoặc Enter).
+3.  **Tìm kiếm (Search) - Streaming**
+    *   **Kích hoạt:** Người dùng nhập từ khóa và nhấn "Search".
     *   **Workflow:** `["search_index"]`
     *   **Luồng:**
         1.  GUI gửi `Command::StartSearch { locations, keyword }`.
-        2.  `search_index`: Chuẩn hóa từ khóa. Yêu cầu `DbManager` tìm kiếm.
-        3.  Bên trong `DbManager`, quá trình tìm kiếm được thực hiện song song theo luồng: nó duyệt qua CSDL trên đĩa, kiểm tra từng file, và chỉ thu thập các kết quả khớp vào bộ nhớ.
-        4.  Worker gửi `GuiUpdate::SearchCompleted(results)` với danh sách kết quả.
+        2.  `search_index`: Process này giờ đây chịu trách nhiệm streaming. Nó lặp qua các địa điểm, tìm kiếm trong CSDL, và ngay khi có kết quả, nó xử lý trước (lấy icon, tạo `DisplayResult`) và gửi về cho GUI theo từng lô nhỏ (batch) qua thông điệp `GuiUpdate::SearchResultsBatch`.
+        3.  Luồng GUI nhận từng lô và nối vào danh sách. Khi hiển thị danh sách này, nó sử dụng một hàm `truncate_path` để cắt ngắn các đường dẫn dài từ phía trước (dựa trên ước tính chiều rộng ký tự), đảm bảo mỗi dòng có chiều cao không đổi. Việc này giải quyết triệt để vấn đề hiệu năng khi cuộn một danh sách kết quả rất lớn.
+        4.  Khi `search_index` hoàn tất, nó gửi một thông điệp `GuiUpdate::SearchFinished` để báo cho GUI biết là quá trình tìm kiếm đã kết thúc.
 
 ### **Hướng dẫn bảo trì và mở rộng**
 

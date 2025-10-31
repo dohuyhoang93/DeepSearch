@@ -56,23 +56,25 @@ Tài liệu này mô tả chi tiết các luồng xử lý (workflow) chính c�
 
 ---
 
-## Workflow 3: Tìm Kiếm (Search)
+## Workflow 3: Tìm Kiếm (Search) - Streaming
 
 *   **Tên workflow trong code:** `gui_search`
-*   **Mục đích:** Tìm kiếm các file trong các chỉ mục đã chọn dựa trên từ khóa do người dùng cung cấp.
+*   **Mục đích:** Tìm kiếm và hiển thị kết quả trong thời gian thực khi chúng được tìm thấy.
 
 **Sơ đồ xử lý:**
 `search_index (search.rs)`
 
 **Diễn giải chi tiết:**
 1.  **Process: `processes::search::search_index`**
-    *   Gọi `utils::normalize_string` để chuẩn hóa từ khóa tìm kiếm (loại bỏ dấu, chuyển thành chữ thường).
-    *   Lặp qua danh sách các địa điểm (`locations`) cần tìm kiếm.
-    *   Với mỗi địa điểm, gọi `db::DbManager::search_in_table` với tên bảng và từ khóa đã chuẩn hóa.
-    *   Bên trong `search_in_table`:
-        *   Mở bảng chỉ mục tương ứng.
-        *   Sử dụng `rayon::par_bridge` để duyệt song song tất cả các bản ghi trong bảng.
-        *   Với mỗi bản ghi, giải mã (`bincode::decode`) `FileMetadata`.
-        *   So sánh `metadata.normalized_name` với từ khóa.
-        *   Nếu khớp, thêm đường dẫn tương đối của file vào danh sách kết quả.
-    *   Sau khi có danh sách các đường dẫn tương đối, process sẽ chuyển chúng thành đường dẫn tuyệt đối và trả về cho GUI hiển thị.
+    *   Chuẩn hóa từ khóa tìm kiếm.
+    *   Lặp qua từng địa điểm (`location`) cần tìm kiếm.
+    *   Với mỗi địa điểm, gọi `db::DbManager::search_in_table` để lấy về một danh sách các đường dẫn tương đối khớp với từ khóa.
+    *   **Bắt đầu streaming:** Lặp qua danh sách đường dẫn vừa tìm được.
+        *   Chuyển đường dẫn tương đối thành tuyệt đối.
+        *   Xử lý trước thông tin hiển thị: lấy icon (`utils::get_icon_for_path`) và đóng gói vào struct `DisplayResult`.
+        *   Thêm `DisplayResult` vào một lô (batch) tạm thời.
+        *   Khi lô đầy (ví dụ: 200 mục), gửi ngay lô này về cho luồng GUI qua thông điệp `GuiUpdate::SearchResultsBatch`.
+    *   Sau khi duyệt qua tất cả các địa điểm, gửi nốt lô cuối cùng (nếu còn) và kết thúc bằng một thông điệp `GuiUpdate::SearchFinished`.
+2.  **Giao diện (UI):**
+    *   Khi nhận được các lô `DisplayResult`, giao diện sẽ nối chúng vào danh sách kết quả.
+    *   Khi vẽ từng dòng, nó sẽ dùng logic cắt chuỗi (`truncate_path`) dựa trên một hằng số ước tính chiều rộng ký tự để đảm bảo mỗi kết quả chỉ chiếm một dòng, giúp việc cuộn danh sách luôn mượt mà.

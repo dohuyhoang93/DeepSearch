@@ -8,7 +8,7 @@ use crate::pop::context::Context;
 use crate::pop::engine::Engine;
 use crate::pop::registry::Registry;
 use crate::processes;
-use super::events::{Command, GuiUpdate};
+use super::events::{Command, GuiUpdate, DisplayResult};
 
 // --- App State ---
 
@@ -17,6 +17,8 @@ enum Tab {
     Indexing,
     Search,
 }
+
+
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
@@ -45,15 +47,15 @@ pub struct DeepSearchApp {
     #[serde(skip)]
     show_about_window: bool,
     #[serde(skip)]
-        pub background_texture: Option<egui::TextureHandle>,
-        #[serde(skip)]
-        locations: Vec<(String, String, u64)>,
-        #[serde(skip)]
-        search_keyword: String,
-        #[serde(skip)]
+    pub background_texture: Option<egui::TextureHandle>,
+    #[serde(skip)]
+    locations: Vec<(String, String, u64)>,
+    #[serde(skip)]
+    search_keyword: String,
+    #[serde(skip)]
     search_scope: HashMap<String, bool>,
     #[serde(skip)]
-    search_results: Vec<String>,
+    search_results: Vec<DisplayResult>,
 }
 
 impl Default for DeepSearchApp {
@@ -140,11 +142,10 @@ impl Default for DeepSearchApp {
                     Command::StartSearch { locations, keyword } => {
                         context.search_locations = locations;
                         context.search_keyword = Some(keyword);
-                        match engine.run_workflow("gui_search", context) {
-                            Ok(final_context) => {
-                                update_sender.send(GuiUpdate::SearchCompleted(final_context.search_results)).unwrap();
-                            }
-                            Err(e) => update_sender.send(GuiUpdate::Error(e.to_string())).unwrap(),
+                        // The workflow now streams results back by itself.
+                        // We just run it for its side effects.
+                        if let Err(e) = engine.run_workflow("gui_search", context) {
+                            update_sender.send(GuiUpdate::Error(e.to_string())).unwrap();
                         }
                     }
                 }
@@ -257,11 +258,14 @@ impl eframe::App for DeepSearchApp {
                     };
                     self.command_sender.send(Command::FetchLocations).unwrap();
                 }
-                GuiUpdate::SearchCompleted(results) => {
+                GuiUpdate::SearchResultsBatch(batch) => {
+                    self.search_results.extend(batch);
+                    self.current_status = format!("Found {} results...", self.search_results.len());
+                }
+                GuiUpdate::SearchFinished => {
                     self.is_running_task = false;
                     self.scan_progress = 0.0;
-                    self.current_status = format!("Found {} results.", results.len());
-                    self.search_results = results;
+                    self.current_status = format!("Search finished. Found {} results.", self.search_results.len());
                 }
                 GuiUpdate::Error(msg) => {
                     self.is_running_task = false;
@@ -320,20 +324,14 @@ impl eframe::App for DeepSearchApp {
                         ui.label("Source Code:");
                         ui.hyperlink("https://github.com/dohuyhoang93/DeepSearch");
                     });
-                    ui.add_space(15.0);
-                    
-                    ui.separator();
-                    ui.add_space(10.0);
+                    ui.add_space(20.0);
 
                     // --- Opacity Slider ---
                     ui.horizontal(|ui| {
                         ui.label("UI Opacity:");
                         ui.add(egui::Slider::new(&mut self.background_alpha, 100..=255));
                     });
-                    ui.add_space(10.0);
-
-                    ui.separator();
-                    ui.add_space(10.0);
+                    ui.add_space(20.0);
 
                     ui.vertical_centered(|ui| {
                         ui.label("If you find this project useful, please consider supporting its development.");
@@ -378,12 +376,12 @@ impl eframe::App for DeepSearchApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.separator();
+            ui.add_space(5.0); // Add some top padding
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.active_tab, Tab::Indexing, "Indexing");
                 ui.selectable_value(&mut self.active_tab, Tab::Search, "Search");
             });
-            ui.separator();
+            ui.add_space(10.0); // Space after the tab bar
 
             match self.active_tab {
                 Tab::Indexing => self.draw_indexing_tab(ui),
@@ -397,13 +395,17 @@ impl eframe::App for DeepSearchApp {
 
 impl DeepSearchApp {
     fn draw_indexing_tab(&mut self, ui: &mut egui::Ui) {
-        ui.add_enabled_ui(!self.is_running_task, |ui| {
-            egui::Grid::new("indexing_grid").num_columns(2).spacing([10.0, 10.0]).show(ui, |ui|{
-                ui.label(egui::RichText::new("Initial Scan").strong());
-                ui.end_row();
+        ui.add_space(10.0);
 
-                ui.label("New Folder Path:");
+        // --- Initial Scan Section ---
+        ui.add_enabled_ui(!self.is_running_task, |ui| {
+            // Use a standard left-aligned vertical layout
+            ui.vertical(|ui| {
+                ui.label(egui::RichText::new("Initial Scan").strong());
+                ui.add_space(5.0);
+
                 ui.horizontal(|ui| {
+                    ui.label("New Folder Path:");
                     let text_edit = egui::TextEdit::singleline(&mut self.target_path_input).hint_text("C:\\Users\\YourUser\\Documents");
                     ui.add(text_edit);
 
@@ -413,9 +415,10 @@ impl DeepSearchApp {
                         }
                     }
                 });
-                ui.end_row();
 
-                ui.label("");
+                ui.add_space(5.0);
+
+                // This button will now have its natural width
                 if ui.button("Start Initial Scan").clicked() {
                     if !self.target_path_input.is_empty() {
                         self.is_running_task = true;
@@ -426,63 +429,58 @@ impl DeepSearchApp {
                         self.current_status = "Please enter a path to scan.".to_string();
                     }
                 }
-                ui.end_row();
             });
         });
-        
-                ui.separator();
-        
-        
-        
-                ui.label(egui::RichText::new("Manage Indexed Locations").strong());
-        
-                if ui.button("Refresh").clicked() && !self.is_running_task {
-        
+
+        ui.add_space(20.0); // Replaces the separator
+
+        // --- Manage Indexed Locations Section ---
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("Manage Indexed Locations").strong());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("⟲ Refresh").clicked() && !self.is_running_task {
                     self.current_status = "Fetching locations...".to_string();
-        
                     self.command_sender.send(Command::FetchLocations).unwrap();
-        
                 }
-        
-                egui::ScrollArea::vertical().show(ui, |ui| {
-        
-                    for (path, _, count) in self.locations.clone() {
-        
-                        let label_text = format!("{} ({} files)", path, count);
-        
-                        ui.horizontal(|ui| {
-        
-                            let _ = ui.selectable_label(false, label_text);
-        
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        
-                                if ui.button("🗑 Delete").clicked() {
-        
-                                    self.confirming_delete = Some(path.clone());
-        
-                                }
-        
-                                if ui.button("🔄 Rescan").clicked() {
-        
-                                    self.is_running_task = true;
-        
-                                    self.search_results.clear();
-        
-                                    self.current_status = "Requesting rescan...".to_string();
-        
-                                    self.command_sender.send(Command::StartRescan(path.clone())).unwrap();
-        
-                                }
-        
-                            });
-        
+            });
+        });
+        ui.add_space(10.0);
+
+        // Define a custom frame for the cards
+        let card_frame = egui::Frame {
+            inner_margin: egui::Margin { left: 10, right: 10, top: 10, bottom: 10 },
+            corner_radius: 5.0.into(),
+            fill: {
+                let [r, g, b, a] = ui.visuals().panel_fill.to_array();
+                let new_a = (a as u16 + 15).min(255) as u8;
+                egui::Color32::from_rgba_premultiplied(r, g, b, new_a)
+            },
+            ..egui::Frame::default()
+        };
+
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for (path, _, count) in self.locations.clone() {
+                // Use the custom frame for each location card
+                card_frame.show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new(&path).strong().size(14.0));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("🗑 Delete").clicked() {
+                                self.confirming_delete = Some(path.clone());
+                            }
+                            if ui.button("🔄 Rescan").clicked() {
+                                self.is_running_task = true;
+                                self.search_results.clear();
+                                self.current_status = "Requesting rescan...".to_string();
+                                self.command_sender.send(Command::StartRescan(path.clone())).unwrap();
+                            }
                         });
-        
-                        ui.separator();
-        
-                    }
-        
+                    });
+                    ui.label(format!("{} files indexed", count));
                 });
+                ui.add_space(5.0); // Space between cards
+            }
+        });
     }
 
     fn draw_search_tab(&mut self, ui: &mut egui::Ui) {
@@ -502,7 +500,7 @@ impl DeepSearchApp {
             }
         });
 
-        ui.separator();
+        ui.add_space(10.0);
 
         // Search scope and results are in a side-by-side layout
         egui::SidePanel::left("search_scope_panel")
@@ -536,18 +534,28 @@ impl DeepSearchApp {
                 });
             } else {
                 let text_height = ui.text_style_height(&egui::TextStyle::Body);
+
+                const WIDE_CHAR_APPROX_WIDTH: f32 = 10.0; // Use a constant approximation
+
                 egui::ScrollArea::vertical().show_rows(ui, text_height, self.search_results.len(), |ui, row_range| {
+                    let available_width = ui.available_width();
+                    let num_chars_to_keep = (available_width / WIDE_CHAR_APPROX_WIDTH).floor() as usize;
+
                     for i in row_range {
                         if let Some(result) = self.search_results.get(i) {
-                                                    let icon = DeepSearchApp::get_icon_for_path(result);
-                                                    let display_text = format!("{} {}", icon, result);
-                                                    let response = ui.selectable_label(false, display_text);
-                                                    response.context_menu(|ui| {                                if ui.button("Open File").clicked() {
-                                    self.command_sender.send(Command::OpenFile(result.clone())).unwrap();
+                            let truncated_path = self.truncate_path(&result.full_path, num_chars_to_keep);
+
+                            let display_text = format!("{} {}", result.icon, truncated_path);
+                            let response = ui.selectable_label(false, display_text)
+                                .on_hover_text(&*result.full_path);
+
+                            response.context_menu(|ui| {
+                                if ui.button("Open File").clicked() {
+                                    self.command_sender.send(Command::OpenFile(result.full_path.to_string())).unwrap();
                                     ui.close();
                                 }
                                 if ui.button("Open File Location").clicked() {
-                                    self.command_sender.send(Command::OpenLocation(result.clone())).unwrap();
+                                    self.command_sender.send(Command::OpenLocation(result.full_path.to_string())).unwrap();
                                     ui.close();
                                 }
                             });
@@ -579,25 +587,20 @@ impl DeepSearchApp {
         }
     }
 
-    // Helper to get an icon based on file extension
-    fn get_icon_for_path(path: &str) -> &'static str {
-        let path_buf = PathBuf::from(path);
-        if path_buf.is_dir() {
-            return "📁"; // Folder icon
+    // Helper to truncate path from the start if it's too long
+    fn truncate_path(&self, path: &str, max_chars: usize) -> String {
+        if path.chars().count() <= max_chars {
+            return path.to_string();
         }
-        match path_buf.extension().and_then(|s| s.to_str()) {
-            Some("txt") | Some("md") | Some("log") => "📄", // Text file
-            Some("pdf") => "📃", // PDF
-            Some("doc") | Some("docx") => "📝", // Word document
-            Some("xls") | Some("xlsx") | Some("csv") => "📊", // Spreadsheet
-            Some("ppt") | Some("pptx") => " presentation", // Presentation
-            Some("zip") | Some("rar") | Some("7z") | Some("tar") | Some("gz") => "📦", // Archive
-            Some("jpg") | Some("jpeg") | Some("png") | Some("gif") | Some("bmp") | Some("svg") => "🖼️", // Image
-            Some("mp3") | Some("wav") | Some("flac") | Some("ogg") => "🎵", // Audio
-            Some("mp4") | Some("mkv") | Some("avi") | Some("mov") => "🎬", // Video
-            Some("exe") | Some("dll") | Some("bin") => "⚙️", // Executable/Binary
-            Some("rs") | Some("py") | Some("js") | Some("html") | Some("css") | Some("json") | Some("xml") => "💻", // Code
-            _ => "🗄️", // Generic file
+        if max_chars <= 5 {
+            return "...".to_string();
         }
+        
+        let truncated_chars: String = path.chars().rev().take(max_chars.saturating_sub(4)).collect();
+        let truncated_path = truncated_chars.chars().rev().collect::<String>();
+        
+        format!("...{}", truncated_path)
     }
+
+
 }

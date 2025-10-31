@@ -1,4 +1,12 @@
 use std::path::PathBuf;
+use std::sync::Arc;
+
+/// A struct to hold pre-processed info for display, to make the UI loop faster.
+#[derive(Debug, Clone)]
+pub struct DisplayResult {
+    pub full_path: Arc<str>,
+    pub icon: &'static str,
+}
 
 /// Commands sent from the GUI thread to the Worker thread.
 #[derive(Debug)]
@@ -22,6 +30,7 @@ pub enum GuiUpdate {
     LocationsFetched(Vec<(String, String, u64)>), // (path, table_name, count)
     ScanProgress(f32, String), // Progress percentage and a message
     ScanCompleted(usize),      // Number of files indexed
-    SearchCompleted(Vec<String>),
+    SearchResultsBatch(Vec<DisplayResult>),
+    SearchFinished,
     Error(String),
 }

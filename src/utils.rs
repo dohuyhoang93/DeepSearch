@@ -126,3 +126,25 @@ pub fn build_file_data(entry: &walkdir::DirEntry, root_path: &Path) -> (String, 
     };
     (relative_path, metadata)
 }
+
+// Helper to get an icon based on file extension
+pub fn get_icon_for_path(path: &str) -> &'static str {
+    let path_buf = PathBuf::from(path);
+    if path_buf.is_dir() {
+        return "📁"; // Folder icon
+    }
+    match path_buf.extension().and_then(|s| s.to_str()) {
+        Some("txt") | Some("md") | Some("log") => "📄", // Text file
+        Some("pdf") => "📃", // PDF
+        Some("doc") | Some("docx") => "📝", // Word document
+        Some("xls") | Some("xlsx") | Some("csv") => "📊", // Spreadsheet
+        Some("ppt") | Some("pptx") => " presentation", // Presentation
+        Some("zip") | Some("rar") | Some("7z") | Some("tar") | Some("gz") => "📦", // Archive
+        Some("jpg") | Some("jpeg") | Some("png") | Some("gif") | Some("bmp") | Some("svg") => "🖼️", // Image
+        Some("mp3") | Some("wav") | Some("flac") | Some("ogg") => "🎵", // Audio
+        Some("mp4") | Some("mkv") | Some("avi") | Some("mov") => "🎬", // Video
+        Some("exe") | Some("dll") | Some("bin") => "⚙️", // Executable/Binary
+        Some("rs") | Some("py") | Some("js") | Some("html") | Some("css") | Some("json") | Some("xml") => "💻", // Code
+        _ => "🗄️", // Generic file
+    }
+}
