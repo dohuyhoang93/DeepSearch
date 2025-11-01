@@ -13,7 +13,7 @@ const BATCH_SIZE: usize = 50_000;
 
 /// Process: Scans the directory and streams file data through a channel for the initial scan.
 pub fn scan_directory_streaming(mut context: Context) -> anyhow::Result<Context> {
-    let root_path = context.target_path.as_ref().unwrap().clone();
+    let root_path = context.live_search_root_path.as_ref().unwrap_or_else(|| context.target_path.as_ref().unwrap()).clone();
     let reporter = context.progress_reporter.clone();
     let (tx, rx) = mpsc::channel();
 

@@ -127,6 +127,14 @@ pub fn build_file_data(entry: &walkdir::DirEntry, root_path: &Path) -> (String, 
     (relative_path, metadata)
 }
 
+/// Checks if a target string contains all of the provided tokens.
+pub fn contains_all_tokens(target: &str, tokens: &[&str]) -> bool {
+    if tokens.is_empty() {
+        return true; // Or false, depending on desired behavior for empty query
+    }
+    tokens.iter().all(|token| target.contains(token))
+}
+
 // Helper to get an icon based on file extension
 pub fn get_icon_for_path(path: &str) -> &'static str {
     let path_buf = PathBuf::from(path);

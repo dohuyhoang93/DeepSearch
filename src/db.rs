@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use bincode::{Decode, Encode};
 use std::path::Path;
 use rayon::prelude::*;
+use crate::utils;
 
 const LOCATIONS_TABLE: TableDefinition<&str, &str> = TableDefinition::new("locations");
 
@@ -98,7 +99,7 @@ impl DbManager {
                 let value_bytes = value.value();
                 if let Ok((metadata, _len)) = bincode::decode_from_slice::<FileMetadata, _>(value_bytes, bincode::config::standard()) {
                     // Check if all tokens are present in the normalized name
-                    if query_tokens.iter().all(|token| metadata.normalized_name.contains(token)) {
+                    if utils::contains_all_tokens(&metadata.normalized_name, &query_tokens) {
                         return Some(key.value().to_string());
                     }
                 }

@@ -8,6 +8,14 @@ pub struct DisplayResult {
     pub icon: &'static str,
 }
 
+/// Detailed search result for live search.
+#[derive(Debug, Clone)]
+pub struct LiveSearchResult {
+    pub file_path: String,
+    pub line_number: usize,
+    pub line_content: String,
+}
+
 /// Commands sent from the GUI thread to the Worker thread.
 #[derive(Debug)]
 #[allow(dead_code)] // The compiler doesn't see the usage in the context_menu closure
@@ -21,6 +29,9 @@ pub enum Command {
     StartSearch {
         locations: Vec<(String, String)>,
         keyword: String,
+        is_live_search_active: bool,
+        live_search_path: Option<PathBuf>,
+        search_in_content: bool,
     },
 }
 
@@ -31,6 +42,7 @@ pub enum GuiUpdate {
     ScanProgress(f32, String), // Progress percentage and a message
     ScanCompleted(usize),      // Number of files indexed
     SearchResultsBatch(Vec<DisplayResult>),
+    LiveSearchResultsBatch(Vec<LiveSearchResult>),
     SearchFinished,
     Error(String),
 }

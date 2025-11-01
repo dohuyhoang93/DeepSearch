@@ -22,6 +22,8 @@ eframe = { version = "=0.33", features = ["persistence"] }
 rfd = "=0.15.4"
 open = "5.0"
 image = { version = "0.24", features = ["png"] }
+lopdf = "0.31.0"
+jwalk = "0.6.0"
 
 [build-dependencies]
 embed-resource = "2.4"

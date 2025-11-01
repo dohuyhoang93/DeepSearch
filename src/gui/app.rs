@@ -8,7 +8,7 @@ use crate::pop::context::Context;
 use crate::pop::engine::Engine;
 use crate::pop::registry::Registry;
 use crate::processes;
-use super::events::{Command, GuiUpdate, DisplayResult};
+use super::events::{Command, GuiUpdate, DisplayResult, LiveSearchResult};
 
 // --- App State ---
 
@@ -56,6 +56,14 @@ pub struct DeepSearchApp {
     search_scope: HashMap<String, bool>,
     #[serde(skip)]
     search_results: Vec<DisplayResult>,
+    #[serde(skip)]
+    live_search_path_input: String,
+    #[serde(skip)]
+    live_search_results: Vec<LiveSearchResult>,
+    #[serde(skip)]
+    is_live_search_active: bool,
+    #[serde(skip)]
+    live_search_in_content: bool,
 }
 
 impl Default for DeepSearchApp {
@@ -72,11 +80,13 @@ impl Default for DeepSearchApp {
             registry.register_process("write_index_from_stream_batched", processes::index::write_index_from_stream_batched);
             registry.register_process("rescan_atomic_swap", processes::scan::rescan_atomic_swap);
             registry.register_process("search_index", processes::search::search_index);
+            registry.register_process("live_search_and_stream_results", processes::live_search::live_search_and_stream_results);
 
             // Register GUI-specific workflows
             registry.register_workflow("gui_initial_scan", vec!["scan_directory_streaming".to_string(), "write_index_from_stream_batched".to_string()]);
             registry.register_workflow("gui_rescan", vec!["rescan_atomic_swap".to_string()]);
             registry.register_workflow("gui_search", vec!["search_index".to_string()]);
+            registry.register_workflow("gui_live_search", vec!["live_search_and_stream_results".to_string()]);
 
             let engine = Engine::new(registry);
             let db_path = PathBuf::from("deepsearch_index.redb");
@@ -139,13 +149,19 @@ impl Default for DeepSearchApp {
                             Err(e) => update_sender.send(GuiUpdate::Error(e.to_string())).unwrap(),
                         }
                     }
-                    Command::StartSearch { locations, keyword } => {
-                        context.search_locations = locations;
+                    Command::StartSearch { locations, keyword, is_live_search_active, live_search_path, search_in_content } => {
                         context.search_keyword = Some(keyword);
-                        // The workflow now streams results back by itself.
-                        // We just run it for its side effects.
-                        if let Err(e) = engine.run_workflow("gui_search", context) {
-                            update_sender.send(GuiUpdate::Error(e.to_string())).unwrap();
+                        context.search_in_content = search_in_content;
+                        if is_live_search_active {
+                            context.live_search_root_path = live_search_path;
+                            if let Err(e) = engine.run_workflow("gui_live_search", context) {
+                                update_sender.send(GuiUpdate::Error(e.to_string())).unwrap();
+                            }
+                        } else {
+                            context.search_locations = locations;
+                            if let Err(e) = engine.run_workflow("gui_search", context) {
+                                update_sender.send(GuiUpdate::Error(e.to_string())).unwrap();
+                            }
                         }
                     }
                 }
@@ -171,6 +187,10 @@ impl Default for DeepSearchApp {
             search_keyword: "".to_string(),
             search_scope: HashMap::new(),
             search_results: vec![],
+            live_search_path_input: "".to_string(),
+            live_search_results: vec![],
+            is_live_search_active: false,
+            live_search_in_content: false,
         }
     }
 }
@@ -262,10 +282,18 @@ impl eframe::App for DeepSearchApp {
                     self.search_results.extend(batch);
                     self.current_status = format!("Found {} results...", self.search_results.len());
                 }
+                GuiUpdate::LiveSearchResultsBatch(batch) => {
+                    self.live_search_results.extend(batch);
+                    self.current_status = format!("Found {} live results...", self.live_search_results.len());
+                }
                 GuiUpdate::SearchFinished => {
                     self.is_running_task = false;
                     self.scan_progress = 0.0;
-                    self.current_status = format!("Search finished. Found {} results.", self.search_results.len());
+                    self.current_status = if self.is_live_search_active && self.live_search_in_content {
+                        format!("Search finished. Found {} live results.", self.live_search_results.len())
+                    } else {
+                        format!("Search finished. Found {} results.", self.search_results.len())
+                    };
                 }
                 GuiUpdate::Error(msg) => {
                     self.is_running_task = false;
@@ -484,8 +512,25 @@ impl DeepSearchApp {
     }
 
     fn draw_search_tab(&mut self, ui: &mut egui::Ui) {
-        // Search controls
         ui.add_enabled_ui(!self.is_running_task, |ui| {
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.is_live_search_active, "Live Search in Folder");
+                if self.is_live_search_active {
+                    ui.checkbox(&mut self.live_search_in_content, "Search in file content");
+                    ui.label("Path:");
+                    let text_edit = egui::TextEdit::singleline(&mut self.live_search_path_input).hint_text("C:\\Users\\YourUser\\Documents");
+                    ui.add(text_edit);
+
+                    if ui.button("Browse...").clicked() {
+                        if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                            self.live_search_path_input = path.display().to_string();
+                        }
+                    }
+                }
+            });
+            ui.add_space(10.0);
+
+            // Search controls
             ui.horizontal(|ui| {
                 ui.label("Keyword:");
                 ui.label("🔍"); // Search icon
@@ -523,45 +568,86 @@ impl DeepSearchApp {
         egui::CentralPanel::default().show_inside(ui, |ui| {
             ui.label(egui::RichText::new("Results:").strong());
 
-            if self.search_results.is_empty() && !self.is_running_task {
-                ui.add_space(10.0);
-                ui.vertical_centered(|ui| {
-                    if self.search_keyword.is_empty() {
-                        ui.label("Enter a keyword to begin searching.");
-                    } else {
-                        ui.label(format!("No results found for '{}'", self.search_keyword));
-                    }
-                });
-            } else {
-                let text_height = ui.text_style_height(&egui::TextStyle::Body);
-
-                const WIDE_CHAR_APPROX_WIDTH: f32 = 10.0; // Use a constant approximation
-
-                egui::ScrollArea::vertical().show_rows(ui, text_height, self.search_results.len(), |ui, row_range| {
-                    let available_width = ui.available_width();
-                    let num_chars_to_keep = (available_width / WIDE_CHAR_APPROX_WIDTH).floor() as usize;
-
-                    for i in row_range {
-                        if let Some(result) = self.search_results.get(i) {
-                            let truncated_path = self.truncate_path(&result.full_path, num_chars_to_keep);
-
-                            let display_text = format!("{} {}", result.icon, truncated_path);
-                            let response = ui.selectable_label(false, display_text)
-                                .on_hover_text(&*result.full_path);
-
-                            response.context_menu(|ui| {
-                                if ui.button("Open File").clicked() {
-                                    self.command_sender.send(Command::OpenFile(result.full_path.to_string())).unwrap();
-                                    ui.close();
-                                }
-                                if ui.button("Open File Location").clicked() {
-                                    self.command_sender.send(Command::OpenLocation(result.full_path.to_string())).unwrap();
-                                    ui.close();
-                                }
-                            });
+            if self.is_live_search_active && self.live_search_in_content {
+                // Display live search results (content search)
+                if self.live_search_results.is_empty() && !self.is_running_task {
+                    ui.add_space(10.0);
+                    ui.vertical_centered(|ui| {
+                        if self.search_keyword.is_empty() {
+                            ui.label("Enter a keyword to begin live searching.");
+                        } else {
+                            ui.label(format!("No live results found for '{}'", self.search_keyword));
                         }
-                    }
-                });
+                    });
+                } else {
+                    let text_height = ui.text_style_height(&egui::TextStyle::Body);
+                    egui::ScrollArea::vertical().show_rows(ui, text_height, self.live_search_results.len(), |ui, row_range| {
+                        for i in row_range {
+                            if let Some(result) = self.live_search_results.get(i) {
+                                let display_text = if result.file_path.ends_with(".pdf") {
+                                    format!("{} [Page {}] - {}", result.file_path, result.line_number, result.line_content)
+                                } else {
+                                    format!("{} [Line {}] - {}", result.file_path, result.line_number, result.line_content)
+                                };
+                                let response = ui.selectable_label(false, display_text)
+                                    .on_hover_text(&result.file_path);
+
+                                response.context_menu(|ui| {
+                                    if ui.button("Open File").clicked() {
+                                        self.command_sender.send(Command::OpenFile(result.file_path.clone())).unwrap();
+                                        ui.close();
+                                    }
+                                    if ui.button("Open File Location").clicked() {
+                                        self.command_sender.send(Command::OpenLocation(result.file_path.clone())).unwrap();
+                                        ui.close();
+                                    }
+                                });
+                            }
+                        }
+                    });
+                }
+            } else {
+                // Display indexed search results (existing logic)
+                if self.search_results.is_empty() && !self.is_running_task {
+                    ui.add_space(10.0);
+                    ui.vertical_centered(|ui| {
+                        if self.search_keyword.is_empty() {
+                            ui.label("Enter a keyword to begin searching.");
+                        } else {
+                            ui.label(format!("No results found for '{}'", self.search_keyword));
+                        }
+                    });
+                } else {
+                    let text_height = ui.text_style_height(&egui::TextStyle::Body);
+
+                    const WIDE_CHAR_APPROX_WIDTH: f32 = 10.0; // Use a constant approximation
+
+                    egui::ScrollArea::vertical().show_rows(ui, text_height, self.search_results.len(), |ui, row_range| {
+                        let available_width = ui.available_width();
+                        let num_chars_to_keep = (available_width / WIDE_CHAR_APPROX_WIDTH).floor() as usize;
+
+                        for i in row_range {
+                            if let Some(result) = self.search_results.get(i) {
+                                let truncated_path = self.truncate_path(&result.full_path, num_chars_to_keep);
+
+                                let display_text = format!("{} {}", result.icon, truncated_path);
+                                let response = ui.selectable_label(false, display_text)
+                                    .on_hover_text(&*result.full_path);
+
+                                response.context_menu(|ui| {
+                                    if ui.button("Open File").clicked() {
+                                        self.command_sender.send(Command::OpenFile(result.full_path.to_string())).unwrap();
+                                        ui.close();
+                                    }
+                                    if ui.button("Open File Location").clicked() {
+                                        self.command_sender.send(Command::OpenLocation(result.full_path.to_string())).unwrap();
+                                        ui.close();
+                                    }
+                                });
+                            }
+                        }
+                    });
+                }
             }
         });
     }
@@ -574,13 +660,27 @@ impl DeepSearchApp {
                 .collect();
             
             if !selected_locations.is_empty() {
+                if self.is_live_search_active && self.live_search_in_content {
+                    self.live_search_results.clear();
+                } else {
+                    self.search_results.clear();
+                }
                 self.is_running_task = true;
-                self.search_results.clear();
                 self.current_status = "Requesting search...".to_string();
                 let locations_for_search: Vec<_> = selected_locations.iter()
                     .map(|(path, table_name, _)| (path.clone(), table_name.clone()))
                     .collect();
-                self.command_sender.send(Command::StartSearch { locations: locations_for_search, keyword: self.search_keyword.clone() }).unwrap();
+                self.command_sender.send(Command::StartSearch {
+                    locations: locations_for_search,
+                    keyword: self.search_keyword.clone(),
+                    is_live_search_active: self.is_live_search_active,
+                    live_search_path: if self.is_live_search_active && !self.live_search_path_input.is_empty() {
+                        Some(PathBuf::from(&self.live_search_path_input))
+                    } else {
+                        None
+                    },
+                    search_in_content: self.live_search_in_content,
+                }).unwrap();
             } else {
                 self.current_status = "Please select at least one location to search in.".to_string();
             }

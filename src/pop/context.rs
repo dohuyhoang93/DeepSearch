@@ -9,6 +9,7 @@ pub struct Context {
     // --- Common data for all workflows ---
     pub db_path: Option<PathBuf>,
     pub target_path: Option<PathBuf>,
+    pub live_search_root_path: Option<PathBuf>,
     pub files_found_count: usize,
     pub progress_reporter: Option<Sender<GuiUpdate>>,
 
@@ -17,5 +18,6 @@ pub struct Context {
 
     // --- Data for Search ---
     pub search_keyword: Option<String>,
-    pub search_locations: Vec<(String, String)>, // (location_path, table_name)
+    pub search_locations: Vec<(String, String)>,
+    pub search_in_content: bool,
 }
