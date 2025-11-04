@@ -32,6 +32,9 @@ pub enum Command {
         is_live_search_active: bool,
         live_search_path: Option<PathBuf>,
         search_in_content: bool,
+        search_in_pdf: bool,
+        search_in_office: bool,
+        search_in_plain_text: bool,
     },
 }
 

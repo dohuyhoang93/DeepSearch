@@ -20,4 +20,7 @@ pub struct Context {
     pub search_keyword: Option<String>,
     pub search_locations: Vec<(String, String)>,
     pub search_in_content: bool,
+    pub search_in_pdf: bool,
+    pub search_in_office: bool,
+    pub search_in_plain_text: bool,
 }

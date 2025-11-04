@@ -64,6 +64,12 @@ pub struct DeepSearchApp {
     is_live_search_active: bool,
     #[serde(skip)]
     live_search_in_content: bool,
+    #[serde(skip)]
+    search_in_pdf: bool,
+    #[serde(skip)]
+    search_in_office: bool,
+    #[serde(skip)]
+    search_in_plain_text: bool,
 }
 
 impl Default for DeepSearchApp {
@@ -149,9 +155,12 @@ impl Default for DeepSearchApp {
                             Err(e) => update_sender.send(GuiUpdate::Error(e.to_string())).unwrap(),
                         }
                     }
-                    Command::StartSearch { locations, keyword, is_live_search_active, live_search_path, search_in_content } => {
+                    Command::StartSearch { locations, keyword, is_live_search_active, live_search_path, search_in_content, search_in_pdf, search_in_office, search_in_plain_text } => {
                         context.search_keyword = Some(keyword);
                         context.search_in_content = search_in_content;
+                        context.search_in_pdf = search_in_pdf;
+                        context.search_in_office = search_in_office;
+                        context.search_in_plain_text = search_in_plain_text;
                         if is_live_search_active {
                             context.live_search_root_path = live_search_path;
                             if let Err(e) = engine.run_workflow("gui_live_search", context) {
@@ -191,6 +200,9 @@ impl Default for DeepSearchApp {
             live_search_results: vec![],
             is_live_search_active: false,
             live_search_in_content: false,
+            search_in_pdf: true,
+            search_in_office: true,
+            search_in_plain_text: true,
         }
     }
 }
@@ -513,22 +525,38 @@ impl DeepSearchApp {
 
     fn draw_search_tab(&mut self, ui: &mut egui::Ui) {
         ui.add_enabled_ui(!self.is_running_task, |ui| {
-            ui.horizontal(|ui| {
-                ui.checkbox(&mut self.is_live_search_active, "Live Search in Folder");
-                if self.is_live_search_active {
-                    ui.checkbox(&mut self.live_search_in_content, "Search in file content");
-                    ui.label("Path:");
-                    let text_edit = egui::TextEdit::singleline(&mut self.live_search_path_input).hint_text("C:\\Users\\YourUser\\Documents");
-                    ui.add(text_edit);
-
-                    if ui.button("Browse...").clicked() {
-                        if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                            self.live_search_path_input = path.display().to_string();
+                    ui.vertical(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut self.is_live_search_active, "Live Search in Folder");
+                        });
+            
+                        if self.is_live_search_active {
+                            ui.horizontal(|ui| {
+                                ui.checkbox(&mut self.live_search_in_content, "Search in file content");
+                            });
+            
+                            ui.add_enabled_ui(self.live_search_in_content, |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label("Include:");
+                                    ui.checkbox(&mut self.search_in_pdf, "PDFs");
+                                    ui.checkbox(&mut self.search_in_office, "Office Files");
+                                    ui.checkbox(&mut self.search_in_plain_text, "Plain Text");
+                                });
+                            });
+            
+                            ui.horizontal(|ui| {
+                                ui.label("Path:");
+                                let text_edit = egui::TextEdit::singleline(&mut self.live_search_path_input).hint_text("C:\\Users\\YourUser\\Documents");
+                                ui.add(text_edit);
+            
+                                if ui.button("Browse...").clicked() {
+                                    if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                                        self.live_search_path_input = path.display().to_string();
+                                    }
+                                }
+                            });
                         }
-                    }
-                }
-            });
-            ui.add_space(10.0);
+                    });            ui.add_space(10.0);
 
             // Search controls
             ui.horizontal(|ui| {
@@ -680,6 +708,9 @@ impl DeepSearchApp {
                         None
                     },
                     search_in_content: self.live_search_in_content,
+                    search_in_pdf: self.search_in_pdf,
+                    search_in_office: self.search_in_office,
+                    search_in_plain_text: self.search_in_plain_text,
                 }).unwrap();
             } else {
                 self.current_status = "Please select at least one location to search in.".to_string();
