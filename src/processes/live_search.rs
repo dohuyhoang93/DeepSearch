@@ -2,13 +2,15 @@ use crate::pop::context::Context;
 use crate::utils;
 use anyhow::Result;
 use std::fs::File;
-use std::io::{BufReader, BufRead};
+use std::io::{BufReader, BufRead, Read};
 use std::thread;
 use std::sync::{Arc, Mutex};
 use std::mem;
 use jwalk::WalkDir;
 use rayon::prelude::*;
 use crate::gui::events::{GuiUpdate, LiveSearchResult, DisplayResult};
+use calamine::{open_workbook, Reader, Xlsx};
+use docx_rs::{read_docx, DocumentChild, ParagraphChild, RunChild};
 
 const BATCH_SIZE: usize = 100;
 
@@ -72,6 +74,67 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
                                     }
                                 }
                             }
+                            Some("docx") => {
+                                if let Ok(mut file) = File::open(entry.path()) {
+                                    let mut buf = Vec::new();
+                                    if file.read_to_end(&mut buf).is_ok() {
+                                        if let Ok(docx) = read_docx(&buf) {
+                                            let mut full_text = String::new();
+                                            for child in docx.document.children {
+                                                if let DocumentChild::Paragraph(p) = child {
+                                                    for p_child in p.children {
+                                                        if let ParagraphChild::Run(r) = p_child {
+                                                            for r_child in r.children {
+                                                                if let RunChild::Text(t) = r_child {
+                                                                    full_text.push_str(&t.text);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    full_text.push('\n');
+                                                }
+                                            }
+
+                                            if full_text.contains(&search_keyword) {
+                                                let snippet = full_text.lines().find(|l| l.contains(&search_keyword)).unwrap_or("").trim().to_string();
+                                                let result = LiveSearchResult {
+                                                    file_path: entry.path().to_string_lossy().to_string(),
+                                                    line_number: 1, // DOCX doesn't have a clear page/line concept here, so we use 1
+                                                    line_content: snippet,
+                                                };
+                                                let mut batch = live_results_batch.lock().unwrap();
+                                                batch.push(result);
+                                                if batch.len() >= BATCH_SIZE {
+                                                    reporter.send(GuiUpdate::LiveSearchResultsBatch(mem::take(&mut *batch))).ok();
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Some("xlsx") => {
+                                if let Ok(mut workbook) = open_workbook::<Xlsx<_>, _>(entry.path()) {
+                                    for sheet_name in workbook.sheet_names().to_owned() {
+                                        if let Ok(range) = workbook.worksheet_range(&sheet_name) {
+                                            for (i, row) in range.rows().enumerate() {
+                                                let row_text: String = row.iter().map(|cell| cell.to_string()).collect::<Vec<_>>().join(" | ");
+                                                if row_text.contains(&search_keyword) {
+                                                    let result = LiveSearchResult {
+                                                        file_path: entry.path().to_string_lossy().to_string(),
+                                                        line_number: i + 1, // 1-based row number
+                                                        line_content: row_text.trim().to_string(),
+                                                    };
+                                                    let mut batch = live_results_batch.lock().unwrap();
+                                                    batch.push(result);
+                                                    if batch.len() >= BATCH_SIZE {
+                                                        reporter.send(GuiUpdate::LiveSearchResultsBatch(mem::take(&mut *batch))).ok();
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             // Plain text file extensions
                             Some("txt") | Some("md") | Some("log") | Some("rs") | Some("py") | Some("js") | Some("html") | Some("css") | Some("json") | Some("xml") | Some("toml") => {
                                 if let Ok(file) = File::open(entry.path()) {
@@ -96,7 +159,7 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
                             }
                             _ => { /* Skip other file types */ }
                         }
-                                } else {
+                    } else {
                                     // Search only in filename (token-based)
                                     let query_tokens: Vec<&str> = normalized_keyword.split_whitespace().collect();
                                     let normalized_filename = utils::normalize_string(&entry.file_name().to_string_lossy());

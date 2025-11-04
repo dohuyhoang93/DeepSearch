@@ -24,6 +24,8 @@ open = "5.0"
 image = { version = "0.24", features = ["png"] }
 pdf-extract = "0.7.0"
 jwalk = "0.6.0"
+calamine = "0.31"
+docx-rs = "0.4.18"
 
 [build-dependencies]
 embed-resource = "2.4"
