@@ -40,22 +40,33 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
                         let extension = path.extension().and_then(|s| s.to_str());
                         match extension {
                             Some("pdf") => {
-                                if let Ok(doc) = lopdf::Document::load(entry.path()) {
-                                    for page_num in 1..=doc.get_pages().len() {
-                                        let page_id = doc.page_iter().nth(page_num - 1).unwrap();
-                                        if let Ok(page_text) = doc.extract_text(&[page_id.0]) {
-                                            if page_text.contains(&search_keyword) {
-                                                let snippet = page_text.lines().find(|l| l.contains(&search_keyword)).unwrap_or("").trim().to_string();
-                                                let result = LiveSearchResult {
-                                                    file_path: entry.path().to_string_lossy().to_string(),
-                                                    line_number: page_num, // Page number
-                                                    line_content: snippet,
-                                                };
-                                                let mut batch = live_results_batch.lock().unwrap();
-                                                batch.push(result);
-                                                if batch.len() >= BATCH_SIZE {
-                                                    reporter.send(GuiUpdate::LiveSearchResultsBatch(mem::take(&mut *batch))).ok();
-                                                }
+                                if let Ok(text_content) = pdf_extract::extract_text(entry.path()) {
+                                    for (page_num_zero_based, page_text) in
+                                        text_content.split('\x0C').enumerate()
+                                    {
+                                        if page_text.contains(&search_keyword) {
+                                            let snippet = page_text
+                                                .lines()
+                                                .find(|l| l.contains(&search_keyword))
+                                                .unwrap_or("")
+                                                .trim()
+                                                .to_string();
+                                            let result = LiveSearchResult {
+                                                file_path: entry
+                                                    .path()
+                                                    .to_string_lossy()
+                                                    .to_string(),
+                                                line_number: page_num_zero_based + 1, // Page number is 1-based
+                                                line_content: snippet,
+                                            };
+                                            let mut batch = live_results_batch.lock().unwrap();
+                                            batch.push(result);
+                                            if batch.len() >= BATCH_SIZE {
+                                                reporter
+                                                    .send(GuiUpdate::LiveSearchResultsBatch(
+                                                        mem::take(&mut *batch),
+                                                    ))
+                                                    .ok();
                                             }
                                         }
                                     }

@@ -659,7 +659,7 @@ impl DeepSearchApp {
                 .cloned()
                 .collect();
             
-            if !selected_locations.is_empty() {
+            if !selected_locations.is_empty() || self.is_live_search_active {
                 if self.is_live_search_active && self.live_search_in_content {
                     self.live_search_results.clear();
                 } else {
