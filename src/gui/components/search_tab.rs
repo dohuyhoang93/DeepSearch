@@ -96,6 +96,7 @@ impl SearchTab {
                     }
                     state.is_running_task = false;
                     state.is_paused = false;
+                    state.current_status = "Search stopped.".to_string();
                 }
 
                 if state.is_paused {
@@ -104,14 +105,14 @@ impl SearchTab {
                             controller.resume();
                         }
                         state.is_paused = false;
+                        state.current_status = "Resuming search...".to_string();
                     }
-                } else {
-                    if ui.button("Pause").clicked() {
-                        if let Some(controller) = &state.active_task_control {
-                            controller.pause();
-                        }
-                        state.is_paused = true;
+                } else if ui.button("Pause").clicked() {
+                    if let Some(controller) = &state.active_task_control {
+                        controller.pause();
                     }
+                    state.is_paused = true;
+                    state.current_status = "Search paused.".to_string();
                 }
             }
         });

@@ -1,14 +1,10 @@
 use eframe::egui;
 
+#[derive(Default)]
 pub struct MenuBar {
     pub show_about_window: bool,
 }
 
-impl Default for MenuBar {
-    fn default() -> Self {
-        Self { show_about_window: false }
-    }
-}
 
 impl MenuBar {
     pub fn ui(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {

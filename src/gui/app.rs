@@ -151,7 +151,7 @@ impl Default for DeepSearchApp {
                         }
                     }
                     Command::StartRescan(path) => {
-                        context.target_path = Some(path.into());
+                        context.target_path = Some(path);
                         match engine.run_workflow("gui_rescan", context) {
                             Ok(final_context) => {
                                 update_sender.send(GuiUpdate::ScanCompleted(final_context.files_found_count)).unwrap();
@@ -194,7 +194,7 @@ impl Default for DeepSearchApp {
             menu_bar: MenuBar::default(),
             indexing_tab: IndexingTab::default(),
             search_tab: SearchTab::default(),
-            status_bar: StatusBar::default(),
+            status_bar: StatusBar,
             background_texture: None,
         }
     }
@@ -248,37 +248,36 @@ impl eframe::App for DeepSearchApp {
         // --- Set Style ---
         let new_visuals = if self.dark_mode {
             let mut visuals = egui::Visuals::dark();
-            visuals.override_text_color = Some(egui::Color32::from_rgb(0, 255, 255)); // Cyan
-            visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(20, 40, 60);
-            visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(40, 60, 80);
-            visuals.widgets.active.bg_fill = egui::Color32::from_rgb(60, 80, 100);
-            visuals.widgets.noninteractive.bg_stroke = egui::Stroke::NONE;
-            visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
-            visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
-            visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
-            visuals.widgets.open.bg_stroke = egui::Stroke::NONE;
-            visuals.window_stroke = egui::Stroke::NONE;
+            visuals.override_text_color = Some(egui::Color32::from_rgb(0, 255, 200)); // User's choice
+            visuals.window_fill = egui::Color32::from_rgb(10, 25, 35);
+            visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(20, 40, 55);
+            visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(30, 55, 70);
+            visuals.widgets.active.bg_fill = egui::Color32::from_rgb(15, 30, 45);
+            visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 255, 200, 100));
+            visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 255, 200, 150));
+            visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 255, 200, 200));
+            visuals.selection.bg_fill = egui::Color32::from_rgb(32, 32, 32);
             visuals.selection.stroke = egui::Stroke::NONE;
+            visuals.window_stroke = egui::Stroke::NONE;
+            visuals.widgets.open.bg_stroke = egui::Stroke::NONE;
+            visuals.widgets.noninteractive.bg_stroke = egui::Stroke::NONE;
             visuals
         } else {
-            if self.background_texture.is_some() {
-                let mut visuals = egui::Visuals::light();
-                visuals.override_text_color = Some(egui::Color32::from_rgb(0, 0, 0)); // Black
-                visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 0);
-                visuals.widgets.noninteractive.bg_stroke = egui::Stroke::NONE;
-                visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(10, 30, 10);
-                visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(30, 50, 30);
-                visuals.widgets.active.bg_fill = egui::Color32::from_rgb(50, 70, 50);
-                visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
-                visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
-                visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
-                visuals.widgets.open.bg_stroke = egui::Stroke::NONE;
-                visuals.window_stroke = egui::Stroke::NONE;
-                visuals.selection.stroke = egui::Stroke::NONE;
-                visuals
-            } else {
-                egui::Visuals::light()
-            }
+            let mut visuals = egui::Visuals::light();
+            visuals.override_text_color = Some(egui::Color32::from_rgb(255, 255, 0)); // Dark Navy Blue for readability
+            visuals.window_fill = egui::Color32::from_rgb(245, 248, 255);
+            visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(230, 235, 245);
+            visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(210, 220, 235);
+            visuals.widgets.active.bg_fill = egui::Color32::from_rgb(190, 200, 215);
+            visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 0, 139, 100));
+            visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 0, 139, 150));
+            visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 0, 139, 200));
+            visuals.selection.bg_fill = egui::Color32::from_rgb(170, 210, 255);
+            visuals.selection.stroke = egui::Stroke::NONE;
+            visuals.window_stroke = egui::Stroke::NONE;
+            visuals.widgets.open.bg_stroke = egui::Stroke::NONE;
+            visuals.widgets.noninteractive.bg_stroke = egui::Stroke::NONE;
+            visuals
         };
         ctx.set_visuals(new_visuals);
 
@@ -305,14 +304,8 @@ impl eframe::App for DeepSearchApp {
         }
 
         // --- Main UI ---
-        let fill_color = if self.dark_mode {
-            egui::Color32::from_rgba_unmultiplied(27, 27, 27, 240) // Dark, semi-transparent
-        } else {
-            egui::Color32::from_rgba_unmultiplied(248, 248, 248, 240) // Light, semi-transparent
-        };
-
         egui::CentralPanel::default()
-            .frame(egui::Frame::default().fill(fill_color).inner_margin(10.0))
+            .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT).inner_margin(10.0).shadow(ctx.style().visuals.window_shadow))
             .show(ctx, |ui| {
                 // --- Menu Bar and About Window ---
                 egui::TopBottomPanel::top("menu_bar").frame(egui::Frame::NONE).show_inside(ui, |ui| {
@@ -332,9 +325,7 @@ impl eframe::App for DeepSearchApp {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if self.dark_mode {
                                 if ui.button("🌞").on_hover_text("Switch to Light Mode").clicked() { self.dark_mode = false; }
-                            } else {
-                                if ui.button("🌙").on_hover_text("Switch to Dark Mode").clicked() { self.dark_mode = true; }
-                            }
+                            } else if ui.button("🌙").on_hover_text("Switch to Dark Mode").clicked() { self.dark_mode = true; }
                         });
                     });
                     ui.add_space(10.0); // Increased spacing
@@ -342,16 +333,14 @@ impl eframe::App for DeepSearchApp {
                 ui.add_space(10.0);
 
                 // --- Main Content Area (Tabs) ---
-                egui::CentralPanel::default().frame(egui::Frame::NONE).show_inside(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.selectable_value(&mut self.active_tab, Tab::Indexing, "Indexing");
-                        ui.selectable_value(&mut self.active_tab, Tab::Search, "Search");
-                    });
-                    match self.active_tab {
-                        Tab::Indexing => self.indexing_tab.ui(ui, &mut self.state, &self.command_sender),
-                        Tab::Search => self.search_tab.ui(ui, &mut self.state, &self.command_sender),
-                    }
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.active_tab, Tab::Indexing, "Indexing");
+                    ui.selectable_value(&mut self.active_tab, Tab::Search, "Search");
                 });
+                match self.active_tab {
+                    Tab::Indexing => self.indexing_tab.ui(ui, &mut self.state, &self.command_sender),
+                    Tab::Search => self.search_tab.ui(ui, &mut self.state, &self.command_sender),
+                }
             });
     }
 }
