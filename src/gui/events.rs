@@ -1,31 +1,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
+use crate::pop::control::TaskController;
 
-/// A struct to hold pre-processed info for display, to make the UI loop faster.
-#[derive(Debug, Clone)]
-pub struct DisplayResult {
-    pub full_path: Arc<str>,
-    pub icon: &'static str,
-}
-
-/// Detailed search result for live search.
-#[derive(Debug, Clone)]
-pub struct LiveSearchResult {
-    pub file_path: String,
-    pub line_number: usize,
-    pub line_content: String,
-}
-
-/// Commands sent from the GUI thread to the Worker thread.
-#[derive(Debug)]
-#[allow(dead_code)] // The compiler doesn't see the usage in the context_menu closure
 pub enum Command {
     FetchLocations,
-    StartInitialScan(PathBuf),
-    StartRescan(String), // The path of the location to rescan
-    DeleteLocation(String), // The path of the location to delete
-    OpenFile(String),
-    OpenLocation(String),
     StartSearch {
         locations: Vec<(String, String)>,
         keyword: String,
@@ -35,17 +13,35 @@ pub enum Command {
         search_in_pdf: bool,
         search_in_office: bool,
         search_in_plain_text: bool,
+        task_controller: Arc<TaskController>,
     },
+    OpenFile(String),
+    OpenLocation(String),
+    DeleteLocation(String),
+    StartInitialScan(PathBuf),
+    StartRescan(PathBuf),
 }
 
-/// Updates sent from the Worker thread back to the GUI thread.
 #[derive(Debug)]
 pub enum GuiUpdate {
-    LocationsFetched(Vec<(String, String, u64)>), // (path, table_name, count)
-    ScanProgress(f32, String), // Progress percentage and a message
-    ScanCompleted(usize),      // Number of files indexed
     SearchResultsBatch(Vec<DisplayResult>),
     LiveSearchResultsBatch(Vec<LiveSearchResult>),
+    ScanProgress(f32, String),
+    ScanCompleted(usize),
     SearchFinished,
+    LocationsUpdated(Vec<(String, String, u64)>),
     Error(String),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct LiveSearchResult {
+    pub file_path: String,
+    pub line_number: usize,
+    pub line_content: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DisplayResult {
+    pub full_path: Arc<str>,
+    pub icon: String,
 }

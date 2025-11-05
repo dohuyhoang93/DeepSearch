@@ -9,6 +9,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 use walkdir::WalkDir;
 use crate::db::FileMetadata;
+use std::sync::Arc;
+use crate::pop::control::TaskController;
+
 use std::time::SystemTime;
 
 // --- String Normalization Helpers ---
@@ -155,4 +158,31 @@ pub fn get_icon_for_path(path: &str) -> &'static str {
         Some("rs") | Some("py") | Some("js") | Some("html") | Some("css") | Some("json") | Some("xml") => "💻", // Code
         _ => "🗄️", // Generic file
     }
+}
+
+/// A helper function that wraps a parallel iterator to make it controllable.
+/// It uses a TaskController to check for pause, resume, and cancel signals
+/// before processing each item.
+pub fn controlled_par_for_each<I, F>(iterator: I, controller: &Arc<TaskController>, operation: F)
+where
+    I: IntoParallelIterator,
+    F: Fn(I::Item) + Sync + Send,
+{
+    iterator.into_par_iter().for_each(|item| {
+        // Check for cancellation first.
+        if controller.is_cancelled() {
+            return;
+        }
+
+        // Check if the task is paused and wait if it is.
+        controller.check_and_wait_if_paused();
+
+        // If woken up, check for cancellation again in case the user cancelled while paused.
+        if controller.is_cancelled() {
+            return;
+        }
+
+        // If not cancelled or paused, perform the operation.
+        operation(item);
+    });
 }

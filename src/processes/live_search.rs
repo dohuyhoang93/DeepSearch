@@ -15,12 +15,17 @@ use docx_rs::{read_docx, DocumentChild, ParagraphChild, RunChild};
 const BATCH_SIZE: usize = 100;
 
 /// Process: Scans a directory and searches file contents on the fly, streaming results back.
-pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
-    let root_path = context.live_search_root_path.clone().ok_or_else(|| anyhow::anyhow!("Live search path not provided"))?;
-    let search_keyword = context.search_keyword.clone().ok_or_else(|| anyhow::anyhow!("Search keyword not provided"))?;
+pub fn live_search_and_stream_results(mut context: Context) -> Result<Context> {
+    let root_path = context.live_search_root_path.take().ok_or_else(|| anyhow::anyhow!("Live search path not provided"))?;
+    let search_keyword = context.search_keyword.take().ok_or_else(|| anyhow::anyhow!("Search keyword not provided"))?;
     let normalized_keyword = utils::normalize_string(&search_keyword);
     let search_in_content = context.search_in_content;
-    let reporter = context.progress_reporter.clone().ok_or_else(|| anyhow::anyhow!("Reporter not available"))?;
+    let search_in_pdf = context.search_in_pdf;
+    let search_in_office = context.search_in_office;
+    let search_in_plain_text = context.search_in_plain_text;
+    let reporter = context.progress_reporter.take().ok_or_else(|| anyhow::anyhow!("Reporter not available"))?;
+    let controller = context.task_controller.take().ok_or_else(|| anyhow::anyhow!("Task controller not available"))?;
+
 
     utils::report_progress(&Some(reporter.clone()), 0.0, &format!("🔍 Starting live search for '{}' in '{}'...", search_keyword, root_path.display()));
 
@@ -28,10 +33,14 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
         let live_results_batch = Arc::new(Mutex::new(Vec::with_capacity(BATCH_SIZE)));
         let indexed_results_batch = Arc::new(Mutex::new(Vec::with_capacity(BATCH_SIZE)));
 
-        WalkDir::new(root_path)
-            .into_iter()
-            .par_bridge()
-            .for_each(|entry_result| {
+        let live_results_batch_for_loop = live_results_batch.clone();
+        let indexed_results_batch_for_loop = indexed_results_batch.clone();
+        let reporter_for_loop = reporter.clone();
+
+        utils::controlled_par_for_each(
+            WalkDir::new(root_path).into_iter().par_bridge(),
+            &controller,
+            move |entry_result| {
                 if let Ok(entry) = entry_result {
                     if !entry.file_type().is_file() {
                         return;
@@ -42,7 +51,7 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
                         let extension = path.extension().and_then(|s| s.to_str());
                         match extension {
                             Some("pdf") => {
-                                if context.search_in_pdf {
+                                if search_in_pdf { // Use the moved variable
                                     if let Ok(text_content) = pdf_extract::extract_text(entry.path()) {
                                         for (page_num_zero_based, page_text) in
                                             text_content.split('\x0C').enumerate()
@@ -62,14 +71,10 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
                                                     line_number: page_num_zero_based + 1, // Page number is 1-based
                                                     line_content: snippet,
                                                 };
-                                                let mut batch = live_results_batch.lock().unwrap();
+                                                let mut batch = live_results_batch_for_loop.lock().unwrap();
                                                 batch.push(result);
                                                 if batch.len() >= BATCH_SIZE {
-                                                    reporter
-                                                        .send(GuiUpdate::LiveSearchResultsBatch(
-                                                            mem::take(&mut *batch),
-                                                        ))
-                                                        .ok();
+                                                    reporter_for_loop.send(GuiUpdate::LiveSearchResultsBatch(mem::take(&mut *batch))).ok();
                                                 }
                                             }
                                         }
@@ -77,7 +82,7 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
                                 }
                             }
                             Some("docx") => {
-                                if context.search_in_office {
+                                if search_in_office { // Use the moved variable
                                     if let Ok(mut file) = File::open(entry.path()) {
                                         let mut buf = Vec::new();
                                         if file.read_to_end(&mut buf).is_ok() {
@@ -105,10 +110,10 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
                                                         line_number: 1, // DOCX doesn't have a clear page/line concept here, so we use 1
                                                         line_content: snippet,
                                                     };
-                                                    let mut batch = live_results_batch.lock().unwrap();
+                                                    let mut batch = live_results_batch_for_loop.lock().unwrap();
                                                     batch.push(result);
                                                     if batch.len() >= BATCH_SIZE {
-                                                        reporter.send(GuiUpdate::LiveSearchResultsBatch(mem::take(&mut *batch))).ok();
+                                                        reporter_for_loop.send(GuiUpdate::LiveSearchResultsBatch(mem::take(&mut *batch))).ok();
                                                     }
                                                 }
                                             }
@@ -117,7 +122,7 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
                                 }
                             }
                             Some("xlsx") => {
-                                if context.search_in_office {
+                                if search_in_office { // Use the moved variable
                                     if let Ok(mut workbook) = open_workbook::<Xlsx<_>, _>(entry.path()) {
                                         for sheet_name in workbook.sheet_names().to_owned() {
                                             if let Ok(range) = workbook.worksheet_range(&sheet_name) {
@@ -129,10 +134,10 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
                                                             line_number: i + 1, // 1-based row number
                                                             line_content: row_text.trim().to_string(),
                                                         };
-                                                        let mut batch = live_results_batch.lock().unwrap();
+                                                        let mut batch = live_results_batch_for_loop.lock().unwrap();
                                                         batch.push(result);
                                                         if batch.len() >= BATCH_SIZE {
-                                                            reporter.send(GuiUpdate::LiveSearchResultsBatch(mem::take(&mut *batch))).ok();
+                                                            reporter_for_loop.send(GuiUpdate::LiveSearchResultsBatch(mem::take(&mut *batch))).ok();
                                                         }
                                                     }
                                                 }
@@ -143,7 +148,7 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
                             }
                             // Plain text file extensions
                             Some("txt") | Some("md") | Some("log") | Some("rs") | Some("py") | Some("js") | Some("html") | Some("css") | Some("json") | Some("xml") | Some("toml") => {
-                                if context.search_in_plain_text {
+                                if search_in_plain_text { // Use the moved variable
                                     if let Ok(file) = File::open(entry.path()) {
                                         let reader = BufReader::new(file);
                                         for (line_number, line) in reader.lines().enumerate() {
@@ -154,10 +159,10 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
                                                         line_number: line_number + 1, // 1-based
                                                         line_content: line_content.trim().to_string(),
                                                     };
-                                                    let mut batch = live_results_batch.lock().unwrap();
+                                                    let mut batch = live_results_batch_for_loop.lock().unwrap();
                                                     batch.push(result);
                                                     if batch.len() >= BATCH_SIZE {
-                                                        reporter.send(GuiUpdate::LiveSearchResultsBatch(mem::take(&mut *batch))).ok();
+                                                        reporter_for_loop.send(GuiUpdate::LiveSearchResultsBatch(mem::take(&mut *batch))).ok();
                                                     }
                                                 }
                                             }
@@ -173,17 +178,18 @@ pub fn live_search_and_stream_results(context: Context) -> Result<Context> {
                                     let normalized_filename = utils::normalize_string(&entry.file_name().to_string_lossy());
                                     if utils::contains_all_tokens(&normalized_filename, &query_tokens) {                            let result = DisplayResult {
                                 full_path: entry.path().to_string_lossy().to_string().into(),
-                                icon: utils::get_icon_for_path(&entry.path().to_string_lossy()),
+                                icon: utils::get_icon_for_path(&entry.path().to_string_lossy()).to_string(),
                             };
-                            let mut batch = indexed_results_batch.lock().unwrap();
+                            let mut batch = indexed_results_batch_for_loop.lock().unwrap();
                             batch.push(result);
                             if batch.len() >= BATCH_SIZE {
-                                reporter.send(GuiUpdate::SearchResultsBatch(mem::take(&mut *batch))).ok();
+                                reporter_for_loop.send(GuiUpdate::SearchResultsBatch(mem::take(&mut *batch))).ok();
                             }
                         }
                     }
                 }
-            });
+            },
+        );
 
         // Send any remaining results
         let mut live_batch = live_results_batch.lock().unwrap();

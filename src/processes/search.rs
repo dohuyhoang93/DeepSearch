@@ -16,30 +16,37 @@ pub fn search_index(mut context: Context) -> anyhow::Result<Context> {
 
     let db_manager = DbManager::new(db_path)?;
     let locations_to_search = std::mem::take(&mut context.search_locations);
-    let num_locations = locations_to_search.len();
 
-    let mut batch = Vec::with_capacity(BATCH_SIZE);
     let mut total_found = 0;
+    let mut batch = Vec::with_capacity(BATCH_SIZE);
 
-    for (i, (location_path, table_name)) in locations_to_search.iter().enumerate() {
-        reporter.send(GuiUpdate::ScanProgress(i as f32 / num_locations as f32, format!("Searching in {}...", location_path)))?;
-        
-        let found_paths = db_manager.search_in_table(table_name, &normalized_keyword)?;
+    if let Some(locations_to_search) = locations_to_search {
+        let num_locations = locations_to_search.len();
+        if num_locations == 0 {
+            reporter.send(GuiUpdate::SearchFinished)?;
+            return Ok(context); // No locations to search
+        }
 
-        for path in found_paths {
-            let full_path = std::path::Path::new(location_path).join(&path).to_string_lossy().to_string();
+        for (i, (location_path, table_name)) in locations_to_search.iter().enumerate() {
+            reporter.send(GuiUpdate::ScanProgress(i as f32 / num_locations as f32, format!("Searching in {}...", location_path)))?;
             
-            let display_result = DisplayResult {
-                icon: utils::get_icon_for_path(&full_path),
-                full_path: full_path.into(),
-            };
+            let found_paths = db_manager.search_in_table(table_name, &normalized_keyword)?;
 
-            batch.push(display_result);
-            total_found += 1;
+            for path in found_paths {
+                let full_path = std::path::Path::new(location_path).join(&path).to_string_lossy().to_string();
+                
+                let display_result = DisplayResult {
+                    icon: utils::get_icon_for_path(&full_path).to_string(),
+                    full_path: full_path.into(),
+                };
 
-            if batch.len() >= BATCH_SIZE {
-                reporter.send(GuiUpdate::SearchResultsBatch(batch.clone()))?;
-                batch.clear();
+                batch.push(display_result);
+                total_found += 1;
+
+                if batch.len() >= BATCH_SIZE {
+                    reporter.send(GuiUpdate::SearchResultsBatch(batch.clone()))?;
+                    batch.clear();
+                }
             }
         }
     }
