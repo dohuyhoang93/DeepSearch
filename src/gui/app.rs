@@ -245,38 +245,40 @@ impl eframe::App for DeepSearchApp {
             }
         }
 
-        // --- Set Style ---
+        // --- Set Style (Cyberpunk inspired) ---
+        let is_background_present = self.background_texture.is_some();
         let new_visuals = if self.dark_mode {
             let mut visuals = egui::Visuals::dark();
-            visuals.override_text_color = Some(egui::Color32::from_rgb(0, 255, 200)); // User's choice
-            visuals.window_fill = egui::Color32::from_rgb(10, 25, 35);
-            visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(20, 40, 55);
-            visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(30, 55, 70);
-            visuals.widgets.active.bg_fill = egui::Color32::from_rgb(15, 30, 45);
-            visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 255, 200, 100));
-            visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 255, 200, 150));
-            visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 255, 200, 200));
-            visuals.selection.bg_fill = egui::Color32::from_rgb(32, 32, 32);
-            visuals.selection.stroke = egui::Stroke::NONE;
-            visuals.window_stroke = egui::Stroke::NONE;
-            visuals.widgets.open.bg_stroke = egui::Stroke::NONE;
-            visuals.widgets.noninteractive.bg_stroke = egui::Stroke::NONE;
+            if is_background_present { // Cyberpunk theme
+                visuals.override_text_color = Some(egui::Color32::from_rgb(0, 255, 170));
+                visuals.window_fill = egui::Color32::TRANSPARENT;
+                visuals.panel_fill = egui::Color32::from_rgba_unmultiplied(10, 25, 35, 220);
+                visuals.widgets.inactive.bg_fill = egui::Color32::from_rgba_unmultiplied(20, 40, 55, 180);
+                visuals.widgets.hovered.bg_fill = egui::Color32::from_rgba_unmultiplied(30, 55, 70, 220);
+                visuals.widgets.active.bg_fill = egui::Color32::from_rgba_unmultiplied(15, 30, 45, 240);
+                visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 255, 170, 100));
+                visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, egui::Color32::from_rgba_unmultiplied(0, 255, 170, 180));
+                visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, egui::Color32::from_rgba_unmultiplied(0, 255, 170, 255));
+                visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(0, 100, 70, 150);
+            } else { // Standard dark
+                visuals.override_text_color = Some(egui::Color32::from_gray(220));
+                visuals.panel_fill = egui::Color32::from_gray(38);
+            }
             visuals
         } else {
             let mut visuals = egui::Visuals::light();
-            visuals.override_text_color = Some(egui::Color32::from_rgb(255, 255, 0)); // Dark Navy Blue for readability
-            visuals.window_fill = egui::Color32::from_rgb(245, 248, 255);
-            visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(230, 235, 245);
-            visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(210, 220, 235);
-            visuals.widgets.active.bg_fill = egui::Color32::from_rgb(190, 200, 215);
-            visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 0, 139, 100));
-            visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 0, 139, 150));
-            visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 0, 139, 200));
-            visuals.selection.bg_fill = egui::Color32::from_rgb(170, 210, 255);
-            visuals.selection.stroke = egui::Stroke::NONE;
-            visuals.window_stroke = egui::Stroke::NONE;
-            visuals.widgets.open.bg_stroke = egui::Stroke::NONE;
-            visuals.widgets.noninteractive.bg_stroke = egui::Stroke::NONE;
+            if is_background_present { // Light theme with background
+                visuals.override_text_color = Some(egui::Color32::from_gray(20));
+                visuals.window_fill = egui::Color32::TRANSPARENT;
+                visuals.panel_fill = egui::Color32::from_rgba_unmultiplied(245, 248, 255, 220);
+                visuals.widgets.inactive.bg_fill = egui::Color32::from_rgba_unmultiplied(230, 235, 245, 180);
+                visuals.widgets.hovered.bg_fill = egui::Color32::from_rgba_unmultiplied(210, 220, 235, 220);
+                visuals.widgets.active.bg_fill = egui::Color32::from_rgba_unmultiplied(190, 200, 215, 240);
+                visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 0, 139, 100));
+                visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 0, 139, 150));
+                visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 0, 139, 200));
+                visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(170, 210, 255, 150);
+            }
             visuals
         };
         ctx.set_visuals(new_visuals);
@@ -303,44 +305,77 @@ impl eframe::App for DeepSearchApp {
             painter.image(texture.id(), screen_rect, uv, egui::Color32::from_rgba_unmultiplied(255, 255, 255, self.background_alpha));
         }
 
-        // --- Main UI ---
-        egui::CentralPanel::default()
-            .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT).inner_margin(10.0).shadow(ctx.style().visuals.window_shadow))
+        // --- Define Frames ---
+        let main_panel_frame = egui::Frame::default()
+            .inner_margin(egui::Margin { left: 16, right: 16, top: 16, bottom: 16 })
+            .corner_radius(egui::CornerRadius::from(8))
+            .fill(ctx.style().visuals.panel_fill)
+            .stroke(ctx.style().visuals.widgets.inactive.bg_stroke);
+
+        // --- Top Bar ---
+        egui::TopBottomPanel::top("top_bar")
+            .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT))
             .show(ctx, |ui| {
-                // --- Menu Bar and About Window ---
-                egui::TopBottomPanel::top("menu_bar").frame(egui::Frame::NONE).show_inside(ui, |ui| {
-                    self.menu_bar.ui(ctx, ui);
-                });
-                ui.add_space(10.0);
+                ui.add_space(5.0);
+                egui::Frame::default()
+                    .inner_margin(egui::Margin { left: 20, right: 20, top: 10, bottom: 10 })
+                    .corner_radius(egui::CornerRadius::from(8))
+                    .fill(ctx.style().visuals.panel_fill)
+                    .stroke(ctx.style().visuals.widgets.inactive.bg_stroke)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            // Left side
+                            self.menu_bar.ui(ctx, ui);
 
-                // --- Status Bar ---
-                egui::TopBottomPanel::bottom("status_bar").frame(egui::Frame::NONE).show_inside(ui, |ui| {
-                    self.status_bar.ui(ui, &self.state);
-                });
+                            // Right side
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if self.dark_mode {
+                                    if ui.button("🌞").on_hover_text("Switch to Light Mode").clicked() { self.dark_mode = false; }
+                                } else if ui.button("🌙").on_hover_text("Switch to Dark Mode").clicked() { self.dark_mode = true; }
 
-                // --- Title Panel ---
-                egui::TopBottomPanel::top("title_panel").frame(egui::Frame::NONE).show_inside(ui, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.heading("DeepSearch");
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if self.dark_mode {
-                                if ui.button("🌞").on_hover_text("Switch to Light Mode").clicked() { self.dark_mode = false; }
-                            } else if ui.button("🌙").on_hover_text("Switch to Dark Mode").clicked() { self.dark_mode = true; }
+                                ui.add_space(10.0);
+                                ui.heading("DeepSearch");
+                            });
                         });
                     });
-                    ui.add_space(10.0); // Increased spacing
-                });
-                ui.add_space(10.0);
+                    ui.add_space(5.0);
+            });
 
-                // --- Main Content Area (Tabs) ---
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.active_tab, Tab::Indexing, "Indexing");
-                    ui.selectable_value(&mut self.active_tab, Tab::Search, "Search");
+        // --- Status Bar ---
+        egui::TopBottomPanel::bottom("status_bar")
+            .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT))
+            .show(ctx, |ui| {
+                ui.add_space(5.0);
+                egui::Frame::default()
+                    .inner_margin(egui::Margin { left: 16, right: 16, top: 10, bottom: 10 })
+                    .corner_radius(egui::CornerRadius::from(8))
+                    .fill(ctx.style().visuals.panel_fill)
+                    .stroke(ctx.style().visuals.widgets.inactive.bg_stroke)
+                    .show(ui, |ui| {
+                        self.status_bar.ui(ui, &self.state);
+                    });
+                ui.add_space(5.0);
+            });
+
+        // --- Main Content ---
+        egui::CentralPanel::default()
+            .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT))
+            .show(ctx, |ui| {
+                main_panel_frame.show(ui, |ui| {
+                    // --- Main Content Area (Tabs) ---
+                    ui.horizontal(|ui| {
+                        ui.selectable_value(&mut self.active_tab, Tab::Indexing, "Indexing");
+                        ui.selectable_value(&mut self.active_tab, Tab::Search, "Search");
+                    });
+                    ui.add_space(5.0);
+                    ui.separator();
+                    ui.add_space(10.0);
+
+                    match self.active_tab {
+                        Tab::Indexing => self.indexing_tab.ui(ui, &mut self.state, &self.command_sender),
+                        Tab::Search => self.search_tab.ui(ui, &mut self.state, &self.command_sender),
+                    }
                 });
-                match self.active_tab {
-                    Tab::Indexing => self.indexing_tab.ui(ui, &mut self.state, &self.command_sender),
-                    Tab::Search => self.search_tab.ui(ui, &mut self.state, &self.command_sender),
-                }
             });
     }
 }
