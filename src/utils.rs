@@ -9,11 +9,9 @@ use std::sync::mpsc::Sender;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 use walkdir::WalkDir;
-use crate::db::FileMetadata;
 use std::sync::Arc;
 use crate::pop::control::TaskController;
 
-use std::time::SystemTime;
 
 // --- String Normalization Helpers ---
 
@@ -136,26 +134,7 @@ where
     });
 }
 
-pub fn build_file_data(entry: &walkdir::DirEntry, root_path: &Path) -> (String, FileMetadata) {
-    let relative_path = entry
-        .path()
-        .strip_prefix(root_path)
-        .unwrap()
-        .to_string_lossy()
-        .to_string();
 
-    let metadata = FileMetadata {
-        normalized_name: normalize_string(&entry.file_name().to_string_lossy()),
-        modified_time: entry
-            .metadata()
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs())
-            .unwrap_or(0),
-    };
-    (relative_path, metadata)
-}
 
 /// Checks if a target string contains all of the provided tokens.
 pub fn contains_all_tokens(target: &str, tokens: &[&str]) -> bool {

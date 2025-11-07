@@ -1,17 +1,19 @@
-use crate::db::DbManager;
+use crate::db::{DbManager, FileMetadata};
 use crate::pop::context::Context;
 use crate::utils;
 use std::sync::mpsc;
 use std::time::SystemTime;
 use std::thread;
 use redb::TableDefinition;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::*;
+use jwalk::WalkDir;
 
 const BATCH_SIZE: usize = 50_000;
 
 // --- PROCESSES ---
 
-/// Process: Scans the directory using the new controllable helper and streams file data.
+/// Process: Scans the directory using a throughput-optimized parallel method (jwalk + par_bridge)
+/// and streams file data. This process is controllable.
 pub fn scan_directory_streaming(mut context: Context) -> anyhow::Result<Context> {
     let root_path = context.target_path.as_ref().unwrap().clone();
     let reporter = context.progress_reporter.clone();
@@ -22,12 +24,43 @@ pub fn scan_directory_streaming(mut context: Context) -> anyhow::Result<Context>
 
     let action_root_path = root_path.clone();
     thread::spawn(move || {
-        let indexing_action = |entry: walkdir::DirEntry| {
-            tx.send(utils::build_file_data(&entry, &action_root_path)).ok();
-        };
+        // Use jwalk + par_bridge for optimal throughput during indexing.
+        WalkDir::new(&action_root_path)
+            .into_iter()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_type().is_file())
+            .par_bridge()
+            .for_each(|entry| {
+                // Controller checks are performed for each file.
+                if controller.is_cancelled() { return; }
+                controller.check_and_wait_if_paused();
+                if controller.is_cancelled() { return; }
 
-        // Use the new, unified, controllable scanning utility.
-        utils::controlled_two_phase_scan(&root_path, &reporter, &controller, indexing_action);
+                // NOTE: Logic from `utils::build_file_data` is replicated here to work with `jwalk::DirEntry`
+                let relative_path = entry
+                    .path()
+                    .strip_prefix(&action_root_path)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
+
+                let metadata = match entry.metadata() {
+                    Ok(meta) => FileMetadata {
+                        normalized_name: utils::normalize_string(&entry.file_name().to_string_lossy()),
+                        modified_time: meta.modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0),
+                    },
+                    Err(_) => FileMetadata {
+                        normalized_name: utils::normalize_string(&entry.file_name().to_string_lossy()),
+                        modified_time: 0,
+                    },
+                };
+
+                tx.send((relative_path, metadata)).ok();
+            });
         // The channel will be closed automatically when the thread finishes and `tx` is dropped.
     });
 
@@ -36,6 +69,7 @@ pub fn scan_directory_streaming(mut context: Context) -> anyhow::Result<Context>
 }
 
 /// Process: Performs a memory-safe, atomic-swap rescan.
+/// NOTE: Rescan is a critical, non-pausable operation for data integrity.
 pub fn rescan_atomic_swap(context: Context) -> anyhow::Result<Context> {
     let root_path = context.target_path.as_ref().unwrap().clone();
     let db_path = context.db_path.as_ref().unwrap().clone();
@@ -51,31 +85,39 @@ pub fn rescan_atomic_swap(context: Context) -> anyhow::Result<Context> {
         SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?.as_secs()
     );
 
-    // Scan filesystem and stream results
+    // Scan filesystem and stream results using the high-throughput jwalk + par_bridge method.
     let (tx, rx) = mpsc::channel();
     let scanner_root_path = root_path.clone();
-    let scanner_reporter = reporter.clone();
-    // NOTE: Rescan is a critical, non-pausable operation for data integrity, so it doesn't use the controlled scan.
     thread::spawn(move || {
-        let (top_level_entries, subdirs) = utils::discover_fs_structure(&scanner_root_path, &scanner_reporter);
-        top_level_entries
-            .par_iter()
-            .filter(|entry| entry.path().is_file())
+        WalkDir::new(&scanner_root_path)
+            .into_iter()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_type().is_file())
+            .par_bridge()
             .for_each(|entry| {
-                tx.send(utils::build_file_data(entry, &scanner_root_path)).ok();
-            });
-        
-        // To maintain the old behavior for this specific process, we manually reconstruct the old `scan_subdirs` logic here.
-        subdirs
-            .par_iter()
-            .for_each(|subdir| {
-                walkdir::WalkDir::new(subdir)
-                    .into_iter()
-                    .filter_map(Result::ok)
-                    .filter(|e| e.path().is_file())
-                    .for_each(|entry| {
-                        tx.send(utils::build_file_data(&entry, &scanner_root_path)).ok();
-                    });
+                // NOTE: Logic from `utils::build_file_data` is replicated here to work with `jwalk::DirEntry`
+                let relative_path = entry
+                    .path()
+                    .strip_prefix(&scanner_root_path)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
+
+                let metadata = match entry.metadata() {
+                    Ok(meta) => FileMetadata {
+                        normalized_name: utils::normalize_string(&entry.file_name().to_string_lossy()),
+                        modified_time: meta.modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0),
+                    },
+                    Err(_) => FileMetadata {
+                        normalized_name: utils::normalize_string(&entry.file_name().to_string_lossy()),
+                        modified_time: 0,
+                    },
+                };
+                tx.send((relative_path, metadata)).ok();
             });
     });
 
