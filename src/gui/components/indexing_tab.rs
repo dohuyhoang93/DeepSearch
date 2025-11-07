@@ -3,6 +3,7 @@ use std::sync::mpsc::Sender;
 use eframe::egui;
 use crate::gui::app::AppState;
 use crate::gui::events::Command;
+use crate::pop::control::TaskController;
 
 pub struct IndexingTab {
     pub target_path_input: String,
@@ -42,7 +43,9 @@ impl IndexingTab {
                         state.scan_progress = 0.0;
                         state.current_status = "Starting scan...".to_string();
                         let path = PathBuf::from(&self.target_path_input);
-                        command_sender.send(Command::StartInitialScan(path)).unwrap();
+                        let task_controller = TaskController::new();
+                        state.active_task_control = Some(task_controller.clone());
+                        command_sender.send(Command::StartInitialScan { path, task_controller }).unwrap();
                     } else {
                         state.current_status = "Please select a path to index.".to_string();
                     }
@@ -105,7 +108,9 @@ impl IndexingTab {
                                     state.is_running_task = true;
                                     state.scan_progress = 0.0;
                                     state.current_status = format!("Rescanning {}...", path);
-                                    command_sender.send(Command::StartRescan(PathBuf::from(path))).unwrap();
+                                    let task_controller = TaskController::new();
+                                state.active_task_control = Some(task_controller.clone());
+                                command_sender.send(Command::StartRescan { path: PathBuf::from(path), task_controller }).unwrap();
                                 }
                                 ui.label(format!("({} files)", count));
                             });

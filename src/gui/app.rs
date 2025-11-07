@@ -82,11 +82,11 @@ impl Default for DeepSearchApp {
             registry.register_process("write_index_from_stream_batched", processes::index::write_index_from_stream_batched);
             registry.register_process("rescan_atomic_swap", processes::scan::rescan_atomic_swap);
             registry.register_process("search_index", processes::search::search_index);
-            registry.register_process("live_search_and_stream_results", processes::live_search::live_search_and_stream_results);
+            registry.register_process("live_search_2_phase", processes::live_search::live_search_2_phase);
             registry.register_workflow("gui_initial_scan", vec!["scan_directory_streaming".to_string(), "write_index_from_stream_batched".to_string()]);
             registry.register_workflow("gui_rescan", vec!["rescan_atomic_swap".to_string()]);
             registry.register_workflow("gui_search", vec!["search_index".to_string()]);
-            registry.register_workflow("gui_live_search", vec!["live_search_and_stream_results".to_string()]);
+            registry.register_workflow("gui_live_search", vec!["live_search_2_phase".to_string()]);
 
             let engine = Engine::new(registry);
             let db_path = PathBuf::from("deepsearch_index.redb");
@@ -141,8 +141,9 @@ impl Default for DeepSearchApp {
                         }
                         update_sender.send(GuiUpdate::ScanCompleted(0)).unwrap();
                     }
-                    Command::StartInitialScan(path) => {
+                    Command::StartInitialScan { path, task_controller } => {
                         context.target_path = Some(path);
+                        context.task_controller = Some(task_controller);
                         match engine.run_workflow("gui_initial_scan", context) {
                             Ok(final_context) => {
                                 update_sender.send(GuiUpdate::ScanCompleted(final_context.files_found_count)).unwrap();
@@ -150,8 +151,9 @@ impl Default for DeepSearchApp {
                             Err(e) => update_sender.send(GuiUpdate::Error(e.to_string())).unwrap(),
                         }
                     }
-                    Command::StartRescan(path) => {
+                    Command::StartRescan { path, task_controller } => {
                         context.target_path = Some(path);
+                        context.task_controller = Some(task_controller);
                         match engine.run_workflow("gui_rescan", context) {
                             Ok(final_context) => {
                                 update_sender.send(GuiUpdate::ScanCompleted(final_context.files_found_count)).unwrap();

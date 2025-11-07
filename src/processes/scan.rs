@@ -1,37 +1,34 @@
 use crate::db::DbManager;
 use crate::pop::context::Context;
 use crate::utils;
-use rayon::prelude::*;
 use std::sync::mpsc;
-use std::time::{SystemTime};
+use std::time::SystemTime;
 use std::thread;
-use redb::{TableDefinition};
+use redb::TableDefinition;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 const BATCH_SIZE: usize = 50_000;
 
 // --- PROCESSES ---
 
-/// Process: Scans the directory and streams file data through a channel for the initial scan.
+/// Process: Scans the directory using the new controllable helper and streams file data.
 pub fn scan_directory_streaming(mut context: Context) -> anyhow::Result<Context> {
-    let root_path = context.live_search_root_path.as_ref().unwrap_or_else(|| context.target_path.as_ref().unwrap()).clone();
+    let root_path = context.target_path.as_ref().unwrap().clone();
     let reporter = context.progress_reporter.clone();
+    let controller = context.task_controller.take().ok_or_else(|| anyhow::anyhow!("Task controller not available for scan"))?;
     let (tx, rx) = mpsc::channel();
 
     utils::report_progress(&reporter, 0.0, &format!("🔍 Starting initial scan for '{}'...", root_path.display()));
 
+    let action_root_path = root_path.clone();
     thread::spawn(move || {
-        let (top_level_entries, subdirs) = utils::discover_fs_structure(&root_path, &reporter);
-        // Handle files at the top level
-        top_level_entries
-            .par_iter()
-            .filter(|entry| entry.path().is_file())
-            .for_each(|entry| {
-                tx.send(utils::build_file_data(entry, &root_path)).ok();
-            });
-        // Scan subdirectories in parallel
-        utils::scan_subdirs(subdirs, &reporter, |entry| {
-            tx.send(utils::build_file_data(entry, &root_path)).ok();
-        });
+        let indexing_action = |entry: walkdir::DirEntry| {
+            tx.send(utils::build_file_data(&entry, &action_root_path)).ok();
+        };
+
+        // Use the new, unified, controllable scanning utility.
+        utils::controlled_two_phase_scan(&root_path, &reporter, &controller, indexing_action);
+        // The channel will be closed automatically when the thread finishes and `tx` is dropped.
     });
 
     context.file_data_stream = Some(rx);
@@ -58,6 +55,7 @@ pub fn rescan_atomic_swap(context: Context) -> anyhow::Result<Context> {
     let (tx, rx) = mpsc::channel();
     let scanner_root_path = root_path.clone();
     let scanner_reporter = reporter.clone();
+    // NOTE: Rescan is a critical, non-pausable operation for data integrity, so it doesn't use the controlled scan.
     thread::spawn(move || {
         let (top_level_entries, subdirs) = utils::discover_fs_structure(&scanner_root_path, &scanner_reporter);
         top_level_entries
@@ -66,9 +64,19 @@ pub fn rescan_atomic_swap(context: Context) -> anyhow::Result<Context> {
             .for_each(|entry| {
                 tx.send(utils::build_file_data(entry, &scanner_root_path)).ok();
             });
-        utils::scan_subdirs(subdirs, &scanner_reporter, |entry| {
-            tx.send(utils::build_file_data(entry, &scanner_root_path)).ok();
-        });
+        
+        // To maintain the old behavior for this specific process, we manually reconstruct the old `scan_subdirs` logic here.
+        subdirs
+            .par_iter()
+            .for_each(|subdir| {
+                walkdir::WalkDir::new(subdir)
+                    .into_iter()
+                    .filter_map(Result::ok)
+                    .filter(|e| e.path().is_file())
+                    .for_each(|entry| {
+                        tx.send(utils::build_file_data(&entry, &scanner_root_path)).ok();
+                    });
+            });
     });
 
     // Write stream to the new table
@@ -114,6 +122,3 @@ pub fn rescan_atomic_swap(context: Context) -> anyhow::Result<Context> {
 
     Ok(context)
 }
-
-
-

@@ -19,7 +19,7 @@ impl Registry {
             workflows: HashMap::new(),
         };
         registry.register_process("scan_directory_streaming", scan::scan_directory_streaming);
-        registry.register_process("live_search_and_stream_results", live_search::live_search_and_stream_results);
+        registry.register_process("live_search_2_phase", live_search::live_search_2_phase);
         registry
     }
 

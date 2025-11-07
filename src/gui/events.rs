@@ -18,8 +18,8 @@ pub enum Command {
     OpenFile(String),
     OpenLocation(String),
     DeleteLocation(String),
-    StartInitialScan(PathBuf),
-    StartRescan(PathBuf),
+    StartInitialScan { path: PathBuf, task_controller: Arc<TaskController> },
+    StartRescan { path: PathBuf, task_controller: Arc<TaskController> },
 }
 
 #[derive(Debug)]
