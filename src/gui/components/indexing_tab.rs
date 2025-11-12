@@ -53,6 +53,36 @@ impl IndexingTab {
             });
         });
 
+        // --- Scan control buttons (visible when a scan is running) ---
+        if state.is_running_task {
+            ui.horizontal(|ui| {
+                if ui.button("Cancel Scan").clicked() {
+                    if let Some(controller) = &state.active_task_control {
+                        controller.cancel();
+                    }
+                    state.is_running_task = false;
+                    state.is_paused = false;
+                    state.current_status = "Scan cancelled.".to_string();
+                }
+
+                if state.is_paused {
+                    if ui.button("Resume").clicked() {
+                        if let Some(controller) = &state.active_task_control {
+                            controller.resume();
+                        }
+                        state.is_paused = false;
+                        state.current_status = "Resuming scan...".to_string();
+                    }
+                } else if ui.button("Pause").clicked() {
+                    if let Some(controller) = &state.active_task_control {
+                        controller.pause();
+                    }
+                    state.is_paused = true;
+                    state.current_status = "Scan paused.".to_string();
+                }
+            });
+        }
+
         // --- Section for listing indexed locations ---
         ui.label(egui::RichText::new("Indexed Locations").strong());
 

@@ -20,4 +20,6 @@ pub struct Context {
     pub file_data_stream: Option<Receiver<(String, crate::db::FileMetadata)>>,
     pub files_found_count: usize,
     pub search_locations: Option<Vec<(String, String)>>,
+    pub new_table_name: Option<String>,
+    pub old_table_name: Option<String>,
 }

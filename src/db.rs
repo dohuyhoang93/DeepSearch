@@ -28,9 +28,10 @@ impl DbManager {
         Ok(Self { db })
     }
 
-    pub fn write_index_for_path(&self, root_path: &str, files: &[(String, FileMetadata)]) -> anyhow::Result<()> {
-        let table_name = self.get_or_create_table_name(root_path)?;
-        let table_def: TableDefinition<&str, &[u8]> = TableDefinition::new(&table_name);
+
+
+    pub fn write_to_table(&self, table_name: &str, files: &[(String, FileMetadata)]) -> anyhow::Result<()> {
+        let table_def: TableDefinition<&str, &[u8]> = TableDefinition::new(table_name);
 
         let txn = self.db.begin_write()?;
         {
@@ -139,7 +140,7 @@ impl DbManager {
         Ok(final_table_name)
     }
 
-    fn get_or_create_table_name(&self, root_path: &str) -> anyhow::Result<String> {
+    pub fn get_or_create_table_name(&self, root_path: &str) -> anyhow::Result<String> {
         if let Some(name) = self.get_table_name(root_path)? {
             return Ok(name);
         }

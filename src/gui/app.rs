@@ -80,11 +80,13 @@ impl Default for DeepSearchApp {
             let mut registry = Registry::new();
             registry.register_process("scan_directory_streaming", processes::scan::scan_directory_streaming);
             registry.register_process("write_index_from_stream_batched", processes::index::write_index_from_stream_batched);
-            registry.register_process("rescan_atomic_swap", processes::scan::rescan_atomic_swap);
+            registry.register_process("rescan_scan_streaming", processes::scan::rescan_scan_streaming);
+            registry.register_process("rescan_write_index_from_stream_batched", processes::index::rescan_write_index_from_stream_batched);
+            registry.register_process("rescan_atomic_swap_final", processes::scan::rescan_atomic_swap_final);
             registry.register_process("search_index", processes::search::search_index);
             registry.register_process("live_search_2_phase", processes::live_search::live_search_2_phase);
             registry.register_workflow("gui_initial_scan", vec!["scan_directory_streaming".to_string(), "write_index_from_stream_batched".to_string()]);
-            registry.register_workflow("gui_rescan", vec!["rescan_atomic_swap".to_string()]);
+            registry.register_workflow("gui_rescan", vec!["rescan_scan_streaming".to_string(), "rescan_write_index_from_stream_batched".to_string(), "rescan_atomic_swap_final".to_string()]);
             registry.register_workflow("gui_search", vec!["search_index".to_string()]);
             registry.register_workflow("gui_live_search", vec!["live_search_2_phase".to_string()]);
 
@@ -107,6 +109,8 @@ impl Default for DeepSearchApp {
                     file_data_stream: None,
                     files_found_count: 0,
                     search_locations: None,
+                    new_table_name: None,
+                    old_table_name: None,
                 };
 
                 match command {
