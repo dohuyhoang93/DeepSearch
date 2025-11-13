@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use super::context::Context;
+use crate::processes::live_search;
+use crate::processes::scan;
 
 /// Defines a Process as a function that takes a Context and returns a new Context (or an error).
 pub type Process = fn(Context) -> anyhow::Result<Context>;
@@ -12,10 +14,13 @@ pub struct Registry {
 
 impl Registry {
     pub fn new() -> Self {
-        Self {
+        let mut registry = Self {
             processes: HashMap::new(),
             workflows: HashMap::new(),
-        }
+        };
+        registry.register_process("scan_directory_streaming", scan::scan_directory_streaming);
+        registry.register_process("live_search_2_phase", live_search::live_search_2_phase);
+        registry
     }
 
     pub fn register_process(&mut self, name: &str, process: Process) {

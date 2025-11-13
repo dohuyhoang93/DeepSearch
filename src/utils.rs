@@ -1,3 +1,4 @@
+
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use unicode_normalization::char::is_combining_mark;
@@ -8,8 +9,9 @@ use std::sync::mpsc::Sender;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 use walkdir::WalkDir;
-use crate::db::FileMetadata;
-use std::time::SystemTime;
+use std::sync::Arc;
+use crate::pop::control::TaskController;
+
 
 // --- String Normalization Helpers ---
 
@@ -80,51 +82,66 @@ pub fn discover_fs_structure(root_path: &Path, reporter: &Option<Sender<GuiUpdat
     (top_level_entries, subdirs)
 }
 
-pub fn scan_subdirs<F: Fn(&walkdir::DirEntry) + Send + Sync>(
-    subdirs: Vec<PathBuf>,
+/// A new, reusable helper that performs a controllable 2-phase scan.
+/// It encapsulates the logic of discovering, iterating, and checking the controller state.
+pub fn controlled_two_phase_scan<F>(
+    root_path: &Path,
     reporter: &Option<Sender<GuiUpdate>>,
+    controller: &Arc<TaskController>,
     action: F,
-) {
+)
+where
+    F: Fn(walkdir::DirEntry) + Send + Sync,
+{
+    let (top_level_entries, subdirs) = discover_fs_structure(root_path, reporter);
+
+    // --- Phase 1: Process top-level files ---
+    let top_level_files: Vec<_> = top_level_entries.into_iter().filter(|e| e.path().is_file()).collect();
+    top_level_files.into_par_iter().for_each(|entry| {
+        if controller.is_cancelled() { return; }
+        controller.check_and_wait_if_paused();
+        if controller.is_cancelled() { return; }
+        action(entry);
+    });
+
+    if controller.is_cancelled() { return; }
+
+    // --- Phase 2: Process subdirectories ---
     let num_subdirs = subdirs.len();
     let processed_subdirs = AtomicUsize::new(0);
     report_progress(reporter, 0.05, "Phase 2/2: Scanning files...");
 
-    subdirs
-        .par_iter()
-        .for_each(|subdir| {
-            WalkDir::new(subdir)
-                .into_iter()
-                .filter_map(Result::ok)
-                .filter(|e| e.path().is_file())
-                .for_each(|entry| action(&entry));
+    subdirs.into_par_iter().for_each(|subdir| {
+        if controller.is_cancelled() { return; }
 
-            let processed_count = processed_subdirs.fetch_add(1, Ordering::SeqCst);
-            if num_subdirs > 0 {
-                let progress = 0.05 + (processed_count as f32 / num_subdirs as f32) * 0.40;
-                report_progress(reporter, progress, &format!("Scanning in {}...", subdir.display()));
+        let walker = WalkDir::new(&subdir).into_iter().filter_map(Result::ok);
+        for entry in walker {
+            if entry.path().is_file() {
+                if controller.is_cancelled() { break; } // Break from inner loop
+                controller.check_and_wait_if_paused();
+                if controller.is_cancelled() { break; }
+                action(entry);
             }
-        });
+        }
+
+        let processed_count = processed_subdirs.fetch_add(1, Ordering::SeqCst);
+        if num_subdirs > 0 {
+            let progress = 0.05 + (processed_count as f32 / num_subdirs as f32) * 0.40;
+            if let Some(sender) = reporter {
+                sender.send(GuiUpdate::ScanProgress(progress, format!("Scanning in {}...", subdir.display()))).ok();
+            }
+        }
+    });
 }
 
-pub fn build_file_data(entry: &walkdir::DirEntry, root_path: &Path) -> (String, FileMetadata) {
-    let relative_path = entry
-        .path()
-        .strip_prefix(root_path)
-        .unwrap()
-        .to_string_lossy()
-        .to_string();
 
-    let metadata = FileMetadata {
-        normalized_name: normalize_string(&entry.file_name().to_string_lossy()),
-        modified_time: entry
-            .metadata()
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs())
-            .unwrap_or(0),
-    };
-    (relative_path, metadata)
+
+/// Checks if a target string contains all of the provided tokens.
+pub fn contains_all_tokens(target: &str, tokens: &[&str]) -> bool {
+    if tokens.is_empty() {
+        return true; // Or false, depending on desired behavior for empty query
+    }
+    tokens.iter().all(|token| target.contains(token))
 }
 
 // Helper to get an icon based on file extension
