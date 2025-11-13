@@ -1,6 +1,17 @@
-# Sơ Đồ Workflow - DeepSearch (v2)
+# Sơ Đồ Workflow - DeepSearch
 
-Tài liệu này mô tả chi tiết các luồng xử lý (workflow) chính của ứng dụng DeepSearch, được suy ra từ mã nguồn. Phiên bản này được cập nhật để phản ánh logic refactor và chi tiết hóa luồng gọi hàm.
+Tài liệu này mô tả chi tiết các luồng xử lý (workflow) chính của ứng dụng DeepSearch, được cập nhật để phản ánh chính xác mã nguồn hiện tại.
+
+---
+
+### Ghi chú chung về Công nghệ Quét File
+
+**Điểm quan trọng:** Tất cả các quy trình liên quan đến việc quét hệ thống file trong ứng dụng (Initial Scan, Rescan, và Live Search) đều sử dụng **cùng một hàm tiện ích lõi**: `utils::controlled_two_phase_scan`.
+
+*   **Công nghệ được chọn:** `walkdir` kết hợp với `rayon`.
+*   **Chiến lược:** "Quét 2 pha" (2-phase scan). Pha 1 khám phá các thư mục con ở cấp cao nhất, và Pha 2 xử lý song song các thư mục đó.
+*   **Lý do lựa chọn:** Đây là một quyết định kiến trúc có chủ đích. Trong các thử nghiệm và benchmark thực tế, chiến lược này cho thấy **hiệu năng vượt trội** so với các phương pháp duyệt song song từ đầu (parallel-first) như `jwalk` + `par_bridge` cho khối lượng công việc của ứng dụng này.
+*   **Cơ chế điều khiển:** Tất cả các tác vụ quét đều có thể được Tạm dừng/Tiếp tục/Hủy bỏ từ giao diện người dùng thông qua `TaskController`.
 
 ---
 
@@ -10,71 +21,81 @@ Tài liệu này mô tả chi tiết các luồng xử lý (workflow) chính c�
 *   **Mục đích:** Quét một thư mục mới, thu thập thông tin của tất cả các file và tạo chỉ mục tìm kiếm trong cơ sở dữ liệu.
 
 **Sơ đồ xử lý:**
-`scan_directory_streaming (scan.rs)` -> `write_index_from_stream_batched (index.rs)`
+`scan_directory_streaming` -> `write_index_from_stream_batched`
 
 **Diễn giải chi tiết:**
 1.  **Process: `processes::scan::scan_directory_streaming`**
     *   Tạo một channel `mpsc` để stream dữ liệu file.
-    *   Tạo một luồng (thread) mới để thực hiện việc quét.
-    *   Bên trong luồng quét:
-        *   Gọi `utils::discover_fs_structure` để lấy danh sách các file/thư mục ở cấp đầu tiên.
-        *   Gọi `utils::scan_subdirs` để quét song song (`rayon::par_iter`) các thư mục con.
-        *   Trong quá trình quét, mỗi file tìm thấy sẽ được xử lý bởi `utils::build_file_data` để tạo `FileMetadata`.
-        *   Gửi `(path, metadata)` qua `mpsc::Sender`.
+    *   Tạo một luồng (thread) mới và gọi `utils::controlled_two_phase_scan` để thực hiện việc quét.
+    *   Trong quá trình quét, mỗi file tìm thấy sẽ được xử lý để tạo `FileMetadata`.
+    *   Gửi `(path, metadata)` qua `mpsc::Sender`.
     *   Process này trả về `Context` có chứa `mpsc::Receiver` (đầu nhận của channel).
 
 2.  **Process: `processes::index::write_index_from_stream_batched`**
-    *   Nhận `Context` chứa `mpsc::Receiver` từ process trước.
-    *   Lặp và nhận dữ liệu từ channel.
-    *   Gom dữ liệu thành từng lô (batch) có kích thước `BATCH_SIZE`.
-    *   Khi một lô đầy, gọi `db::DbManager::write_index_for_path` để ghi toàn bộ lô vào CSDL `redb`.
-    *   Hàm `write_index_for_path` sẽ gọi `get_or_create_table_name` để tạo bảng nếu chưa có, sau đó mở transaction và ghi dữ liệu.
+    *   Nhận `Context` chứa `mpsc::Receiver`.
+    *   Lặp và nhận dữ liệu từ channel, gom chúng thành từng lô (batch).
+    *   Khi một lô đầy, gọi `db::DbManager::write_to_table` để ghi toàn bộ lô vào CSDL `redb`.
 
 ---
 
 ## Workflow 2: Quét Lại (Rescan) với Atomic Swap
 
 *   **Tên workflow trong code:** `gui_rescan`
-*   **Mục đích:** Cập nhật chỉ mục của một địa điểm đã có để phản ánh những thay đổi trong hệ thống file một cách an toàn và hiệu quả.
+*   **Mục đích:** Cập nhật chỉ mục của một địa điểm đã có một cách an toàn và hiệu quả.
 
 **Sơ đồ xử lý:**
-`rescan_atomic_swap (scan.rs)`
+`rescan_scan_streaming` -> `rescan_write_index_from_stream_batched` -> `rescan_atomic_swap_final`
 
 **Diễn giải chi tiết:**
-1.  **Process: `processes::scan::rescan_atomic_swap`**
-    *   **Pha 1: Xây dựng chỉ mục mới**
-        *   Tạo một tên bảng mới, duy nhất (ví dụ: `index_{hash}_{timestamp}`).
-        *   Thực hiện quy trình quét file song song y hệt như `scan_directory_streaming` và stream dữ liệu vào một channel `mpsc`.
-        *   Nhận dữ liệu từ channel và ghi trực tiếp vào **bảng mới** theo từng lô (`batch`). Toàn bộ quá trình này là một luồng ghi tuần tự hiệu suất cao.
-    *   **Pha 2: Hoán đổi và Dọn dẹp**
-        *   Sau khi bảng mới đã được ghi xong, gọi `db::DbManager::swap_location_table`.
-        *   Hàm `swap_location_table` thực hiện một transaction trong CSDL:
-            1.  Đọc tên của bảng chỉ mục **cũ** từ bảng `LOCATIONS`.
-            2.  Cập nhật con trỏ của địa điểm (`root_path`) để trỏ tới tên bảng **mới**.
-            3.  Trả về tên của bảng **cũ**.
-        *   Nhận lại tên bảng cũ, process `rescan_atomic_swap` ngay lập tức gửi yêu cầu xóa toàn bộ bảng cũ đó khỏi CSDL (`delete_table`).
+1.  **Process: `processes::scan::rescan_scan_streaming`**
+    *   Tạo một tên bảng mới, duy nhất trong CSDL.
+    *   Lấy tên bảng cũ.
+    *   Thực hiện việc quét file tương tự như `scan_directory_streaming` và stream dữ liệu qua channel.
+
+2.  **Process: `processes::index::rescan_write_index_from_stream_batched`**
+    *   Nhận dữ liệu từ channel và ghi vào **bảng mới** trong CSDL theo từng lô.
+
+3.  **Process: `processes::scan::rescan_atomic_swap_final`**
+    *   Sau khi bảng mới đã được ghi xong, gọi `db::DbManager::swap_location_table` để cập nhật con trỏ trong bảng `locations` trỏ tới bảng mới.
+    *   Ngay sau đó, gửi yêu cầu xóa toàn bộ bảng cũ khỏi CSDL.
 
 ---
 
-## Workflow 3: Tìm Kiếm (Search) - Streaming
+## Workflow 3: Tìm Kiếm trong Chỉ mục (Indexed Search)
 
 *   **Tên workflow trong code:** `gui_search`
-*   **Mục đích:** Tìm kiếm và hiển thị kết quả trong thời gian thực khi chúng được tìm thấy.
+*   **Mục đích:** Tìm kiếm trong các chỉ mục đã được tạo và hiển thị kết quả.
 
 **Sơ đồ xử lý:**
-`search_index (search.rs)`
+`search_index`
 
 **Diễn giải chi tiết:**
 1.  **Process: `processes::search::search_index`**
     *   Chuẩn hóa từ khóa tìm kiếm.
     *   Lặp qua từng địa điểm (`location`) cần tìm kiếm.
-    *   Với mỗi địa điểm, gọi `db::DbManager::search_in_table` để lấy về một danh sách các đường dẫn tương đối khớp với từ khóa.
-    *   **Bắt đầu streaming:** Lặp qua danh sách đường dẫn vừa tìm được.
-        *   Chuyển đường dẫn tương đối thành tuyệt đối.
-        *   Xử lý trước thông tin hiển thị: lấy icon (`utils::get_icon_for_path`) và đóng gói vào struct `DisplayResult`.
-        *   Thêm `DisplayResult` vào một lô (batch) tạm thời.
-        *   Khi lô đầy (ví dụ: 200 mục), gửi ngay lô này về cho luồng GUI qua thông điệp `GuiUpdate::SearchResultsBatch`.
-    *   Sau khi duyệt qua tất cả các địa điểm, gửi nốt lô cuối cùng (nếu còn) và kết thúc bằng một thông điệp `GuiUpdate::SearchFinished`.
-2.  **Giao diện (UI):**
-    *   Khi nhận được các lô `DisplayResult`, giao diện sẽ nối chúng vào danh sách kết quả.
-    *   Khi vẽ từng dòng, nó sẽ dùng logic cắt chuỗi (`truncate_path`) dựa trên một hằng số ước tính chiều rộng ký tự để đảm bảo mỗi kết quả chỉ chiếm một dòng, giúp việc cuộn danh sách luôn mượt mà.
+    *   Với mỗi địa điểm, gọi `db::DbManager::search_in_table` để lấy về danh sách các đường dẫn tương đối khớp với từ khóa.
+    *   Gửi kết quả về cho luồng GUI theo từng lô nhỏ (batch) qua thông điệp `GuiUpdate::SearchResultsBatch`.
+    *   Khi hoàn tất, gửi `GuiUpdate::SearchFinished`.
+
+---
+
+## Workflow 4: Tìm Kiếm Trực Tiếp (Live Search)
+
+*   **Tên workflow trong code:** `gui_live_search`
+*   **Mục đích:** Tìm kiếm trực tiếp trên hệ thống file mà không cần chỉ mục.
+
+**Sơ đồ xử lý:**
+`live_search_2_phase`
+
+**Diễn giải chi tiết:**
+1.  **Process: `processes::live_search::live_search_2_phase`**
+    *   Tạo một luồng (thread) mới để thực hiện toàn bộ tác vụ.
+    *   Bên trong luồng, gọi hàm tiện ích `utils::controlled_two_phase_scan` để quét file.
+    *   Định nghĩa một hành động (`action`) được thực thi cho mỗi file tìm thấy:
+        *   **Nếu tìm theo tên file:** Chuẩn hóa tên file và so khớp với các token của từ khóa bằng `utils::contains_all_tokens`.
+        *   **Nếu tìm trong nội dung:**
+            *   Kiểm tra đuôi file (`.pdf`, `.docx`, `.xlsx`, `.txt`...).
+            *   Sử dụng các thư viện tương ứng để trích xuất nội dung: `pdf_extract`, `docx_rs`, `calamine`.
+            *   Tìm kiếm từ khóa trong nội dung đã trích xuất.
+    *   Các kết quả tìm thấy (cả tên file và nội dung) được gửi về luồng GUI theo từng lô nhỏ qua `GuiUpdate::LiveSearchResultsBatch` hoặc `GuiUpdate::SearchResultsBatch`.
+    *   Khi quét xong, gửi `GuiUpdate::SearchFinished`.

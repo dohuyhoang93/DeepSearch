@@ -109,35 +109,47 @@ src/
 
 ### **Luồng hoạt động chi tiết (Workflows)**
 
-Các workflow được định nghĩa và đăng ký trong `gui/app.rs`. Chúng được khởi chạy bởi luồng Worker khi nhận được `Command` tương ứng. Kiến trúc này xử lý dữ liệu theo luồng (streaming) để đảm bảo sử dụng bộ nhớ hiệu quả.
+Các workflow được định nghĩa và đăng ký trong `gui/app.rs`. Chúng được khởi chạy bởi luồng Worker khi nhận được `Command` tương ứng.
+
+**Ghi chú quan trọng về Kiến trúc Quét file:**
+Tất cả các tác vụ quét file đều sử dụng chung một hàm tiện ích lõi là `utils::controlled_two_phase_scan`. Hàm này triển khai chiến lược "quét 2 pha" (khám phá thư mục rồi xử lý song song) bằng `walkdir` và `rayon`. Quyết định này được đưa ra sau các benchmark thực tế, nơi chiến lược này cho thấy **hiệu năng cao hơn** so với các phương pháp duyệt song song từ đầu (ví dụ: `jwalk`). Điều này đảm bảo sự thống nhất về công nghệ và hiệu năng tối ưu cho ứng dụng.
 
 1.  **Quét lần đầu (Initial Scan)**
     *   **Kích hoạt:** Người dùng nhập đường dẫn mới và nhấn nút "Start Initial Scan".
     *   **Workflow:** `["scan_directory_streaming", "write_index_from_stream_batched"]`
     *   **Luồng:**
         1.  GUI gửi `Command::StartInitialScan(path)`.
-        2.  `scan_directory_streaming`: Chạy trong một luồng nền, quét toàn bộ thư mục và liên tục gửi dữ liệu file tìm thấy qua một `channel`. Process này hoàn thành gần như ngay lập tức, trả về `Context` chứa đầu nhận của `channel`.
-        3.  `write_index_from_stream_batched`: Nhận dữ liệu từ `channel`, gom chúng thành từng lô (batch), và ghi mỗi lô vào `redb` trong một transaction riêng.
+        2.  `scan_directory_streaming`: Gọi `utils::controlled_two_phase_scan` để quét toàn bộ thư mục và liên tục gửi dữ liệu file tìm thấy qua một `channel`.
+        3.  `write_index_from_stream_batched`: Nhận dữ liệu từ `channel`, gom thành từng lô (batch), và ghi vào `redb`.
         4.  Worker gửi `GuiUpdate::ScanCompleted` khi hoàn tất.
 
 2.  **Quét lại (Rescan) với Atomic Swap**
     *   **Kích hoạt:** Người dùng nhấn nút "Rescan" trên một vị trí đã được index.
-    *   **Workflow:** `["rescan_atomic_swap"]`
+    *   **Workflow:** `["rescan_scan_streaming", "rescan_write_index_from_stream_batched", "rescan_atomic_swap_final"]`
     *   **Luồng:**
-        1.  GUI gửi `Command::StartRescan(path)`.
-        2.  `rescan_atomic_swap`: Process này thực hiện toàn bộ logic một cách tuần tự:
-            *   **Pha 1 (Build):** Tạo một bảng chỉ mục mới hoàn toàn trong CSDL. Quét lại toàn bộ hệ thống file và ghi dữ liệu vào bảng mới này theo từng lô.
-            *   **Pha 2 (Swap & Cleanup):** Sau khi bảng mới được tạo xong, gọi `DbManager::swap_location_table` để cập nhật con trỏ trong bảng `locations` trỏ tới bảng mới, đồng thời lấy về tên bảng cũ. Ngay sau đó, thực hiện xóa toàn bộ bảng cũ.
-        3.  Worker gửi `GuiUpdate::ScanCompleted` khi hoàn tất.
+        1.  `rescan_scan_streaming`: Tạo tên bảng mới và bắt đầu quét file bằng `utils::controlled_two_phase_scan`, stream dữ liệu qua channel.
+        2.  `rescan_write_index_from_stream_batched`: Nhận dữ liệu và ghi vào bảng mới.
+        3.  `rescan_atomic_swap_final`: Sau khi ghi xong, thực hiện hoán đổi nguyên tử (trỏ `locations` tới bảng mới) và xóa bảng cũ.
+        4.  Worker gửi `GuiUpdate::ScanCompleted` khi hoàn tất.
 
-3.  **Tìm kiếm (Search) - Streaming**
+3.  **Tìm kiếm trong Chỉ mục (Indexed Search)**
     *   **Kích hoạt:** Người dùng nhập từ khóa và nhấn "Search".
     *   **Workflow:** `["search_index"]`
     *   **Luồng:**
-        1.  GUI gửi `Command::StartSearch { locations, keyword }`.
-        2.  `search_index`: Process này giờ đây chịu trách nhiệm streaming. Nó lặp qua các địa điểm, tìm kiếm trong CSDL, và ngay khi có kết quả, nó xử lý trước (lấy icon, tạo `DisplayResult`) và gửi về cho GUI theo từng lô nhỏ (batch) qua thông điệp `GuiUpdate::SearchResultsBatch`.
-        3.  Luồng GUI nhận từng lô và nối vào danh sách. Khi hiển thị danh sách này, nó sử dụng một hàm `truncate_path` để cắt ngắn các đường dẫn dài từ phía trước (dựa trên ước tính chiều rộng ký tự), đảm bảo mỗi dòng có chiều cao không đổi. Việc này giải quyết triệt để vấn đề hiệu năng khi cuộn một danh sách kết quả rất lớn.
-        4.  Khi `search_index` hoàn tất, nó gửi một thông điệp `GuiUpdate::SearchFinished` để báo cho GUI biết là quá trình tìm kiếm đã kết thúc.
+        1.  GUI gửi `Command::StartSearch`.
+        2.  `search_index`: Lặp qua các địa điểm, truy vấn CSDL `redb` bằng `DbManager::search_in_table`.
+        3.  Kết quả được xử lý và gửi về GUI theo từng lô nhỏ qua `GuiUpdate::SearchResultsBatch`.
+        4.  Khi xong, gửi `GuiUpdate::SearchFinished`.
+
+4.  **Tìm kiếm Trực tiếp (Live Search)**
+    *   **Kích hoạt:** Người dùng chọn chế độ "Live Search", nhập từ khóa và nhấn "Search".
+    *   **Workflow:** `["live_search_2_phase"]`
+    *   **Luồng:**
+        1.  GUI gửi `Command::StartSearch` với cờ `is_live_search_active` được bật.
+        2.  `live_search_2_phase`: Process này cũng gọi `utils::controlled_two_phase_scan` để quét file.
+        3.  Một hàm `action` được định nghĩa để xử lý từng file: hoặc là so khớp tên file, hoặc là trích xuất và tìm kiếm nội dung bằng các thư viện chuyên dụng (`pdf_extract`, `docx_rs`, `calamine`).
+        4.  Kết quả được gửi về GUI theo từng lô nhỏ qua `GuiUpdate::LiveSearchResultsBatch` hoặc `GuiUpdate::SearchResultsBatch`.
+        5.  Khi xong, gửi `GuiUpdate::SearchFinished`.
 
 ### **Hướng dẫn bảo trì và mở rộng**
 
