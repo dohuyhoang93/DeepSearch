@@ -24,6 +24,8 @@ It builds a fast, searchable index of your local folders and network shared dire
 - **Incremental Updates**: A "Rescan" feature efficiently rebuilds the index for a location in the background. Once complete, it atomically swaps the old index for the new one, ensuring data consistency and high performance.
 - **Optimized for Performance**: Leverages Rust’s concurrency model (`rayon`) for both indexing and searching to maximize throughput and keep the UI responsive.
 - **Intelligent Search**: File name search is insensitive to case and diacritics (e.g., `thanh` will match `Thành`).
+- **Live Search**: Perform direct, on-the-fly searches within specified folders, including content search.
+- **Content Search**: Search within the actual content of various file types (PDF, DOCX, XLSX, plain text).
 - **Cross-Platform**: Runs on Windows, macOS, and Linux.
 
 ---
@@ -128,7 +130,7 @@ The project includes a script to create a standard `.app` bundle.
 
 Planned enhancements for future versions:
 
-- [ ] Search within file contents (content indexing).
+- [x] Search within file contents (content indexing).
 - [ ] Support for regular expressions (regex) and wildcards in search queries.
 - [ ] Exporting search results to CSV or text files.
 - [ ] Advanced settings for configuring exclude patterns.
