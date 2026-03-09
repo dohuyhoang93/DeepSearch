@@ -255,34 +255,46 @@ impl eframe::App for DeepSearchApp {
         let is_background_present = self.background_texture.is_some();
         let new_visuals = if self.dark_mode {
             let mut visuals = egui::Visuals::dark();
-            if is_background_present { // Cyberpunk theme
-                visuals.override_text_color = Some(egui::Color32::from_rgb(0, 255, 170));
-                visuals.window_fill = egui::Color32::TRANSPARENT;
-                visuals.panel_fill = egui::Color32::from_rgba_unmultiplied(10, 25, 35, 220);
-                visuals.widgets.inactive.bg_fill = egui::Color32::from_rgba_unmultiplied(20, 40, 55, 180);
-                visuals.widgets.hovered.bg_fill = egui::Color32::from_rgba_unmultiplied(30, 55, 70, 220);
-                visuals.widgets.active.bg_fill = egui::Color32::from_rgba_unmultiplied(15, 30, 45, 240);
-                visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 255, 170, 100));
-                visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, egui::Color32::from_rgba_unmultiplied(0, 255, 170, 180));
-                visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, egui::Color32::from_rgba_unmultiplied(0, 255, 170, 255));
-                visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(0, 100, 70, 150);
+            if is_background_present { // Cyberpunk theme - High Contrast
+                visuals.window_fill = egui::Color32::from_rgb(10, 20, 30); // Opaque
+                visuals.panel_fill = egui::Color32::from_rgb(10, 20, 30);  // Opaque
+                visuals.override_text_color = Some(egui::Color32::WHITE);   // Pure White
+                
+                visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
+                visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(220));
+                
+                visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(25, 40, 55);
+                visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(40, 60, 80);
+                visuals.widgets.active.bg_fill = egui::Color32::from_rgb(20, 35, 50);
+                
+                visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 255, 170));
+                visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 255, 170));
+                visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 255, 170));
+                
+                visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(0, 255, 170, 60);
             } else { // Standard dark
-                visuals.override_text_color = Some(egui::Color32::from_gray(220));
-                visuals.panel_fill = egui::Color32::from_gray(38);
+                visuals.override_text_color = Some(egui::Color32::from_gray(230));
+                visuals.panel_fill = egui::Color32::from_gray(30);
             }
             visuals
         } else {
             let mut visuals = egui::Visuals::light();
-            if is_background_present { // Light theme with background
-                visuals.override_text_color = Some(egui::Color32::from_gray(20));
-                visuals.window_fill = egui::Color32::TRANSPARENT;
-                visuals.panel_fill = egui::Color32::from_rgba_unmultiplied(245, 248, 255, 220);
-                visuals.widgets.inactive.bg_fill = egui::Color32::from_rgba_unmultiplied(230, 235, 245, 180);
-                visuals.widgets.hovered.bg_fill = egui::Color32::from_rgba_unmultiplied(210, 220, 235, 220);
-                visuals.widgets.active.bg_fill = egui::Color32::from_rgba_unmultiplied(190, 200, 215, 240);
-                visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 0, 139, 100));
-                visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 0, 139, 150));
-                visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(0, 0, 139, 200));
+            if is_background_present { // Light theme - High Contrast
+                visuals.window_fill = egui::Color32::from_rgb(245, 248, 255); // Opaque
+                visuals.panel_fill = egui::Color32::from_rgb(240, 245, 250);  // Opaque
+                visuals.override_text_color = Some(egui::Color32::BLACK);      // Pure Black
+                
+                visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::BLACK);
+                visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(50));
+                
+                visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(225, 230, 240);
+                visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(210, 220, 235);
+                visuals.widgets.active.bg_fill = egui::Color32::from_rgb(190, 205, 225);
+                
+                visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 0, 139));
+                visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 0, 139));
+                visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 0, 139));
+                
                 visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(170, 210, 255, 150);
             }
             visuals
@@ -368,6 +380,11 @@ impl eframe::App for DeepSearchApp {
             .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT))
             .show(ctx, |ui| {
                 main_panel_frame.show(ui, |ui| {
+                    // NOTE: Forcefully apply the theme's override text color to this specific UI panel
+                    if let Some(text_color) = ctx.style().visuals.override_text_color {
+                        ui.visuals_mut().override_text_color = Some(text_color);
+                    }
+
                     // --- Main Content Area (Tabs) ---
                     ui.horizontal(|ui| {
                         ui.selectable_value(&mut self.active_tab, Tab::Indexing, "Indexing");

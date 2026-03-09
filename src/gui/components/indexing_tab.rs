@@ -123,13 +123,14 @@ impl IndexingTab {
             } else {
                 for (path, _table_name, count) in &state.locations {
                     let item_frame = egui::Frame::default()
-                        .inner_margin(5.0)
-                        .stroke(egui::Stroke::NONE)
-                        .fill(ui.style().visuals.widgets.inactive.bg_fill);
+                        .inner_margin(10.0)
+                        .corner_radius(8.0)
+                        .stroke(egui::Stroke::new(1.0, ui.style().visuals.widgets.inactive.bg_stroke.color.linear_multiply(0.4)))
+                        .fill(ui.style().visuals.widgets.inactive.bg_fill.linear_multiply(0.2));
 
                     item_frame.show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            ui.label(format!("📁 {}", path));
+                            ui.label(egui::RichText::new(format!("📁 {}", path)).strong());
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if ui.button("🗑").on_hover_text("Delete Index").clicked() {
                                     self.confirming_delete = Some(path.clone());
@@ -142,10 +143,11 @@ impl IndexingTab {
                                 state.active_task_control = Some(task_controller.clone());
                                 command_sender.send(Command::StartRescan { path: PathBuf::from(path), task_controller }).unwrap();
                                 }
-                                ui.label(format!("({} files)", count));
+                                ui.label(egui::RichText::new(format!("{} files", count)).weak());
                             });
                         });
                     });
+                    ui.add_space(6.0);
                 }
             }
         });

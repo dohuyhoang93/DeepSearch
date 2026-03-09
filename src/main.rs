@@ -83,6 +83,22 @@ fn main() -> anyhow::Result<()> {
             
             cc.egui_ctx.set_fonts(fonts);
 
+            // --- Configure Style ---
+            let mut style = (*cc.egui_ctx.style()).clone();
+            style.text_styles.insert(egui::TextStyle::Body, egui::FontId::new(16.0, egui::FontFamily::Proportional));
+            style.text_styles.insert(egui::TextStyle::Button, egui::FontId::new(16.0, egui::FontFamily::Proportional));
+            style.text_styles.insert(egui::TextStyle::Heading, egui::FontId::new(20.0, egui::FontFamily::Proportional));
+
+            // Modern Spacing & Rounding
+            style.spacing.item_spacing = egui::vec2(10.0, 10.0);
+            style.visuals.window_corner_radius = egui::CornerRadius::from(12);
+            style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::from(8);
+            style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::from(8);
+            style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::from(8);
+            style.visuals.widgets.active.corner_radius = egui::CornerRadius::from(8);
+
+            cc.egui_ctx.set_style(style);
+
             // --- Load App State ---
             let mut app: gui::app::DeepSearchApp = if let Some(storage) = cc.storage {
                 eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()

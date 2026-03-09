@@ -189,14 +189,14 @@ impl SearchTab {
         if self.live_search_results.is_empty() && !state.is_running_task {
             ui.add_space(10.0);
             ui.vertical_centered(|ui| {
-                if self.search_keyword.is_empty() {
-                    ui.label("Enter a keyword to begin live searching.");
-                } else {
-                    ui.label(format!("No live results found for '{}'", self.search_keyword));
-                }
+                    if self.search_keyword.is_empty() {
+                        ui.label(egui::RichText::new("Enter a keyword to begin live searching.").strong());
+                    } else {
+                        ui.label(egui::RichText::new(format!("No live results found for '{}'", self.search_keyword)).strong());
+                    }
             });
         } else {
-            let text_height = ui.text_style_height(&egui::TextStyle::Body);
+            let text_height = ui.text_style_height(&egui::TextStyle::Body) + 8.0; // Thêm khoảng cách cho margin
             egui::ScrollArea::vertical().show_rows(ui, text_height, self.live_search_results.len(), |ui, row_range| {
                 for i in row_range {
                     if let Some(result) = self.live_search_results.get(i) {
@@ -205,21 +205,28 @@ impl SearchTab {
                         } else {
                             format!("{} [Line {}] - {}", result.file_path, result.line_number, result.line_content)
                         };
-                        egui::Frame::NONE.stroke(egui::Stroke::NONE).show(ui, |ui| {
-                            let response = ui.selectable_label(false, display_text)
-                                .on_hover_text(&result.file_path);
+                        
+                        egui::Frame::default()
+                            .fill(ui.style().visuals.widgets.inactive.bg_fill.linear_multiply(0.3))
+                            .stroke(egui::Stroke::new(1.0, ui.style().visuals.widgets.inactive.bg_stroke.color.linear_multiply(0.5)))
+                            .inner_margin(6.0)
+                            .corner_radius(6.0)
+                            .show(ui, |ui| {
+                                let response = ui.selectable_label(false, display_text)
+                                    .on_hover_text(&result.file_path);
 
-                            response.context_menu(|ui| {
-                                if ui.button("Open File").clicked() {
-                                    command_sender.send(Command::OpenFile(result.file_path.clone())).unwrap();
-                                    ui.close();
-                                }
-                                if ui.button("Open File Location").clicked() {
-                                    command_sender.send(Command::OpenLocation(result.file_path.clone())).unwrap();
-                                    ui.close();
-                                }
+                                response.context_menu(|ui| {
+                                    if ui.button("Open File").clicked() {
+                                        command_sender.send(Command::OpenFile(result.file_path.clone())).unwrap();
+                                        ui.close();
+                                    }
+                                    if ui.button("Open File Location").clicked() {
+                                        command_sender.send(Command::OpenLocation(result.file_path.clone())).unwrap();
+                                        ui.close();
+                                    }
+                                });
                             });
-                        });
+                        ui.add_space(2.0);
                     }
                 }
             });
@@ -230,14 +237,14 @@ impl SearchTab {
         if self.search_results.is_empty() && !_state.is_running_task {
             ui.add_space(10.0);
             ui.vertical_centered(|ui| {
-                if self.search_keyword.is_empty() {
-                    ui.label("Enter a keyword to begin searching.");
-                } else {
-                    ui.label(format!("No results found for '{}'", self.search_keyword));
-                }
+                    if self.search_keyword.is_empty() {
+                        ui.label(egui::RichText::new("Enter a keyword to begin searching.").strong());
+                    } else {
+                        ui.label(egui::RichText::new(format!("No results found for '{}'", self.search_keyword)).strong());
+                    }
             });
         } else {
-            let text_height = ui.text_style_height(&egui::TextStyle::Body);
+            let text_height = ui.text_style_height(&egui::TextStyle::Body) + 8.0;
             const WIDE_CHAR_APPROX_WIDTH: f32 = 10.0;
 
             egui::ScrollArea::vertical().show_rows(ui, text_height, self.search_results.len(), |ui, row_range| {
@@ -248,21 +255,28 @@ impl SearchTab {
                     if let Some(result) = self.search_results.get(i) {
                         let truncated_path = self.truncate_path(&result.full_path, num_chars_to_keep);
                         let display_text = format!("{} {}", result.icon, truncated_path);
-                        egui::Frame::NONE.stroke(egui::Stroke::NONE).show(ui, |ui| {
-                            let response = ui.selectable_label(false, display_text)
-                                .on_hover_text(&*result.full_path);
+                        
+                        egui::Frame::default()
+                            .fill(ui.style().visuals.widgets.inactive.bg_fill.linear_multiply(0.3))
+                            .stroke(egui::Stroke::new(1.0, ui.style().visuals.widgets.inactive.bg_stroke.color.linear_multiply(0.5)))
+                            .inner_margin(6.0)
+                            .corner_radius(6.0)
+                            .show(ui, |ui| {
+                                let response = ui.selectable_label(false, display_text)
+                                    .on_hover_text(&*result.full_path);
 
-                            response.context_menu(|ui| {
-                                if ui.button("Open File").clicked() {
-                                    command_sender.send(Command::OpenFile(result.full_path.to_string())).unwrap();
-                                    ui.close();
-                                }
-                                if ui.button("Open File Location").clicked() {
-                                    command_sender.send(Command::OpenLocation(result.full_path.to_string())).unwrap();
-                                    ui.close();
-                                }
+                                response.context_menu(|ui| {
+                                    if ui.button("Open File").clicked() {
+                                        command_sender.send(Command::OpenFile(result.full_path.to_string())).unwrap();
+                                        ui.close();
+                                    }
+                                    if ui.button("Open File Location").clicked() {
+                                        command_sender.send(Command::OpenLocation(result.full_path.to_string())).unwrap();
+                                        ui.close();
+                                    }
+                                });
                             });
-                        });
+                        ui.add_space(2.0);
                     }
                 }
             });
