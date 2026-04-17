@@ -125,8 +125,8 @@ impl IndexingTab {
                     let item_frame = egui::Frame::default()
                         .inner_margin(10.0)
                         .corner_radius(8.0)
-                        .stroke(egui::Stroke::new(1.0, ui.style().visuals.widgets.inactive.bg_stroke.color.linear_multiply(0.4)))
-                        .fill(ui.style().visuals.widgets.inactive.bg_fill.linear_multiply(0.2));
+                        .stroke(ui.style().visuals.widgets.inactive.bg_stroke)
+                        .fill(ui.style().visuals.widgets.inactive.bg_fill);
 
                     item_frame.show(ui, |ui| {
                         ui.horizontal(|ui| {

@@ -190,9 +190,9 @@ impl SearchTab {
             ui.add_space(10.0);
             ui.vertical_centered(|ui| {
                     if self.search_keyword.is_empty() {
-                        ui.label(egui::RichText::new("Enter a keyword to begin live searching.").strong());
+                        ui.label(egui::RichText::new("Enter a keyword to begin live searching.").strong().color(egui::Color32::WHITE));
                     } else {
-                        ui.label(egui::RichText::new(format!("No live results found for '{}'", self.search_keyword)).strong());
+                        ui.label(egui::RichText::new(format!("No live results found for '{}'", self.search_keyword)).strong().color(egui::Color32::WHITE));
                     }
             });
         } else {
@@ -207,12 +207,11 @@ impl SearchTab {
                         };
                         
                         egui::Frame::default()
-                            .fill(ui.style().visuals.widgets.inactive.bg_fill.linear_multiply(0.3))
-                            .stroke(egui::Stroke::new(1.0, ui.style().visuals.widgets.inactive.bg_stroke.color.linear_multiply(0.5)))
-                            .inner_margin(6.0)
-                            .corner_radius(6.0)
+                            .fill(ui.style().visuals.widgets.inactive.bg_fill)
+                            .inner_margin(4.0)
+                            .corner_radius(4.0)
                             .show(ui, |ui| {
-                                let response = ui.selectable_label(false, display_text)
+                                let response = ui.selectable_label(false, egui::RichText::new(display_text).color(egui::Color32::WHITE))
                                     .on_hover_text(&result.file_path);
 
                                 response.context_menu(|ui| {
@@ -238,9 +237,9 @@ impl SearchTab {
             ui.add_space(10.0);
             ui.vertical_centered(|ui| {
                     if self.search_keyword.is_empty() {
-                        ui.label(egui::RichText::new("Enter a keyword to begin searching.").strong());
+                        ui.label(egui::RichText::new("Enter a keyword to begin searching.").strong().color(egui::Color32::WHITE));
                     } else {
-                        ui.label(egui::RichText::new(format!("No results found for '{}'", self.search_keyword)).strong());
+                        ui.label(egui::RichText::new(format!("No results found for '{}'", self.search_keyword)).strong().color(egui::Color32::WHITE));
                     }
             });
         } else {
@@ -257,12 +256,11 @@ impl SearchTab {
                         let display_text = format!("{} {}", result.icon, truncated_path);
                         
                         egui::Frame::default()
-                            .fill(ui.style().visuals.widgets.inactive.bg_fill.linear_multiply(0.3))
-                            .stroke(egui::Stroke::new(1.0, ui.style().visuals.widgets.inactive.bg_stroke.color.linear_multiply(0.5)))
-                            .inner_margin(6.0)
-                            .corner_radius(6.0)
+                            .fill(ui.style().visuals.widgets.inactive.bg_fill)
+                            .inner_margin(4.0)
+                            .corner_radius(4.0)
                             .show(ui, |ui| {
-                                let response = ui.selectable_label(false, display_text)
+                                let response = ui.selectable_label(false, egui::RichText::new(display_text).color(egui::Color32::WHITE))
                                     .on_hover_text(&*result.full_path);
 
                                 response.context_menu(|ui| {

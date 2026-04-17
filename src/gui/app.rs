@@ -47,8 +47,6 @@ impl Default for AppState {
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub struct DeepSearchApp {
-    dark_mode: bool,
-    background_alpha: u8,
     active_tab: Tab,
 
     #[serde(skip)]
@@ -194,8 +192,6 @@ impl Default for DeepSearchApp {
             command_sender,
             update_receiver,
             active_tab: Tab::Indexing,
-            dark_mode: true,
-            background_alpha: 210,
             state: AppState::default(),
             menu_bar: MenuBar::default(),
             indexing_tab: IndexingTab::default(),
@@ -251,154 +247,103 @@ impl eframe::App for DeepSearchApp {
             }
         }
 
-        // --- Set Style (Cyberpunk inspired) ---
-        let is_background_present = self.background_texture.is_some();
-        let new_visuals = if self.dark_mode {
-            let mut visuals = egui::Visuals::dark();
-            if is_background_present { // Cyberpunk theme - High Contrast
-                visuals.window_fill = egui::Color32::from_rgb(10, 20, 30); // Opaque
-                visuals.panel_fill = egui::Color32::from_rgb(10, 20, 30);  // Opaque
-                visuals.override_text_color = Some(egui::Color32::WHITE);   // Pure White
-                
-                visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
-                visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(220));
-                
-                visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(25, 40, 55);
-                visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(40, 60, 80);
-                visuals.widgets.active.bg_fill = egui::Color32::from_rgb(20, 35, 50);
-                
-                visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 255, 170));
-                visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 255, 170));
-                visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 255, 170));
-                
-                visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(0, 255, 170, 60);
-            } else { // Standard dark
-                visuals.override_text_color = Some(egui::Color32::from_gray(230));
-                visuals.panel_fill = egui::Color32::from_gray(30);
-            }
-            visuals
-        } else {
-            let mut visuals = egui::Visuals::light();
-            if is_background_present { // Light theme - High Contrast
-                visuals.window_fill = egui::Color32::from_rgb(245, 248, 255); // Opaque
-                visuals.panel_fill = egui::Color32::from_rgb(240, 245, 250);  // Opaque
-                visuals.override_text_color = Some(egui::Color32::BLACK);      // Pure Black
-                
-                visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::BLACK);
-                visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(50));
-                
-                visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(225, 230, 240);
-                visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(210, 220, 235);
-                visuals.widgets.active.bg_fill = egui::Color32::from_rgb(190, 205, 225);
-                
-                visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 0, 139));
-                visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 0, 139));
-                visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 0, 139));
-                
-                visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(170, 210, 255, 150);
-            }
-            visuals
-        };
-        ctx.set_visuals(new_visuals);
+        // --- Set Style (Dark Flat - Single Theme) ---
+        let mut visuals = egui::Visuals::dark();
+        visuals.window_fill = egui::Color32::from_rgb(30, 40, 55);
+        visuals.panel_fill = egui::Color32::from_rgb(30, 40, 55);
+        visuals.override_text_color = Some(egui::Color32::WHITE);
 
-        // --- Draw Background ---
-        if let Some(texture) = &self.background_texture {
-            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Background, egui::Id::new("background_painter")));
-            let screen_rect = ctx.viewport_rect();
-            let texture_size = texture.size_vec2();
-            let screen_aspect = screen_rect.width() / screen_rect.height();
-            let texture_aspect = texture_size.x / texture_size.y;
-            let mut uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-            if screen_aspect > texture_aspect {
-                let new_height = texture_size.x / screen_aspect;
-                let y_offset = (texture_size.y - new_height) / 2.0;
-                uv.set_top(y_offset / texture_size.y);
-                uv.set_bottom(1.0 - (y_offset / texture_size.y));
-            } else {
-                let new_width = texture_size.y * screen_aspect;
-                let x_offset = (texture_size.x - new_width) / 2.0;
-                uv.set_left(x_offset / texture_size.x);
-                uv.set_right(1.0 - (x_offset / texture_size.x));
-            }
-            painter.image(texture.id(), screen_rect, uv, egui::Color32::from_rgba_unmultiplied(255, 255, 255, self.background_alpha));
-        }
+        visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
+        visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(230));
+
+        visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(45, 60, 80);
+        visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(55, 75, 100);
+        visuals.widgets.active.bg_fill = egui::Color32::from_rgb(35, 50, 70);
+
+        visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 200, 140));
+        visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 255, 170));
+        visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 255, 170));
+
+        visuals.selection.bg_fill = egui::Color32::from_rgb(0, 100, 70);
+        visuals.selection.stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 255, 170));
+        ctx.set_visuals(visuals);
+
+        // --- Draw Background --- (DISABLED FOR TESTING)
+        // if let Some(texture) = &self.background_texture {
+        //     let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Background, egui::Id::new("background_painter")));
+        //     let screen_rect = ctx.viewport_rect();
+        //     let texture_size = texture.size_vec2();
+        //     let screen_aspect = screen_rect.width() / screen_rect.height();
+        //     let texture_aspect = texture_size.x / texture_size.y;
+        //     let mut uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+        //     if screen_aspect > texture_aspect {
+        //         let new_height = texture_size.x / screen_aspect;
+        //         let y_offset = (texture_size.y - new_height) / 2.0;
+        //         uv.set_top(y_offset / texture_size.y);
+        //         uv.set_bottom(1.0 - (y_offset / texture_size.y));
+        //     } else {
+        //         let new_width = texture_size.y * screen_aspect;
+        //         let x_offset = (texture_size.x - new_width) / 2.0;
+        //         uv.set_left(x_offset / texture_size.x);
+        //         uv.set_right(1.0 - (x_offset / texture_size.x));
+        //     }
+        //     painter.image(texture.id(), screen_rect, uv, egui::Color32::WHITE);
+        // }
 
         // --- Define Frames ---
-        let main_panel_frame = egui::Frame::default()
-            .inner_margin(egui::Margin { left: 16, right: 16, top: 16, bottom: 16 })
-            .corner_radius(egui::CornerRadius::from(8))
-            .fill(ctx.style().visuals.panel_fill)
-            .stroke(ctx.style().visuals.widgets.inactive.bg_stroke);
+        let panel_fill = ctx.style().visuals.panel_fill;
 
         // --- Top Bar ---
         egui::TopBottomPanel::top("top_bar")
-            .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT))
+            .frame(egui::Frame::default()
+                .inner_margin(egui::Margin { left: 20, right: 20, top: 10, bottom: 10 })
+                .fill(panel_fill))
             .show(ctx, |ui| {
-                ui.add_space(5.0);
-                egui::Frame::default()
-                    .inner_margin(egui::Margin { left: 20, right: 20, top: 10, bottom: 10 })
-                    .corner_radius(egui::CornerRadius::from(8))
-                    .fill(ctx.style().visuals.panel_fill)
-                    .stroke(ctx.style().visuals.widgets.inactive.bg_stroke)
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            // Left side
-                            self.menu_bar.ui(ctx, ui);
+                ui.horizontal(|ui| {
+                    // Left side - menu
+                    self.menu_bar.ui(ctx, ui);
 
-                            // Right side
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if self.dark_mode {
-                                    if ui.button("🌞").on_hover_text("Switch to Light Mode").clicked() { self.dark_mode = false; }
-                                } else if ui.button("🌙").on_hover_text("Switch to Dark Mode").clicked() { self.dark_mode = true; }
-
-                                ui.add_space(10.0);
-                                ui.heading("DeepSearch");
-                            });
-                        });
+                    // Right side - title (allocate remaining space)
+                    let available = ui.available_size();
+                    ui.allocate_ui_with_layout(available, egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.heading("DeepSearch");
                     });
-                    ui.add_space(5.0);
+                });
             });
 
         // --- Status Bar ---
         egui::TopBottomPanel::bottom("status_bar")
-            .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT))
+            .frame(egui::Frame::default()
+                .inner_margin(egui::Margin { left: 16, right: 16, top: 10, bottom: 10 })
+                .fill(panel_fill))
             .show(ctx, |ui| {
-                ui.add_space(5.0);
-                egui::Frame::default()
-                    .inner_margin(egui::Margin { left: 16, right: 16, top: 10, bottom: 10 })
-                    .corner_radius(egui::CornerRadius::from(8))
-                    .fill(ctx.style().visuals.panel_fill)
-                    .stroke(ctx.style().visuals.widgets.inactive.bg_stroke)
-                    .show(ui, |ui| {
-                        self.status_bar.ui(ui, &self.state);
-                    });
-                ui.add_space(5.0);
+                self.status_bar.ui(ui, &self.state);
             });
 
         // --- Main Content ---
         egui::CentralPanel::default()
-            .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT))
+            .frame(egui::Frame::default()
+                .inner_margin(egui::Margin { left: 16, right: 16, top: 16, bottom: 16 })
+                .fill(panel_fill))
             .show(ctx, |ui| {
-                main_panel_frame.show(ui, |ui| {
-                    // NOTE: Forcefully apply the theme's override text color to this specific UI panel
-                    if let Some(text_color) = ctx.style().visuals.override_text_color {
-                        ui.visuals_mut().override_text_color = Some(text_color);
-                    }
+                // NOTE: Forcefully apply the theme's override text color to this specific UI panel
+                if let Some(text_color) = ctx.style().visuals.override_text_color {
+                    ui.visuals_mut().override_text_color = Some(text_color);
+                }
 
-                    // --- Main Content Area (Tabs) ---
-                    ui.horizontal(|ui| {
-                        ui.selectable_value(&mut self.active_tab, Tab::Indexing, "Indexing");
-                        ui.selectable_value(&mut self.active_tab, Tab::Search, "Search");
-                    });
-                    ui.add_space(5.0);
-                    ui.separator();
-                    ui.add_space(10.0);
-
-                    match self.active_tab {
-                        Tab::Indexing => self.indexing_tab.ui(ui, &mut self.state, &self.command_sender),
-                        Tab::Search => self.search_tab.ui(ui, &mut self.state, &self.command_sender),
-                    }
+                // --- Main Content Area (Tabs) ---
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.active_tab, Tab::Indexing, "Indexing");
+                    ui.selectable_value(&mut self.active_tab, Tab::Search, "Search");
                 });
+                ui.add_space(5.0);
+                ui.separator();
+                ui.add_space(10.0);
+
+                match self.active_tab {
+                    Tab::Indexing => self.indexing_tab.ui(ui, &mut self.state, &self.command_sender),
+                    Tab::Search => self.search_tab.ui(ui, &mut self.state, &self.command_sender),
+                }
             });
     }
 }
