@@ -6,69 +6,85 @@ All notable changes to DeepSearch will be documented in this file.
 
 ## [1.2.1] - 2026-04-21
 
-### ✨ Tính năng mới
+### ⚠️ Breaking Change — Index Compatibility
 
-#### Live Search (Tìm kiếm trực tiếp)
-Bên cạnh "Indexed Search" truyền thống, người dùng có thể tìm kiếm trực tiếp trên một thư mục mà không cần lập chỉ mục trước.
-
-- **Kích hoạt:** Tại tab "Search", chọn checkbox "Live Search in Folder".
-- **Hai chế độ:**
-  1. **Tìm theo tên file (Mặc định):** Tìm kiếm siêu nhanh, chỉ dựa trên tên file.
-  2. **Tìm trong nội dung:** Chọn checkbox "Search in file content" để tìm kiếm bên trong nội dung file.
-
-#### Hỗ trợ đa định dạng nội dung
-- **PDF** (`pdf-extract`): Hiển thị kết quả kèm số trang `[Page X]`.
-- **Microsoft Word** (`.docx`): Hỗ trợ qua `docx-rs`.
-- **Microsoft Excel** (`.xlsx`): Hỗ trợ qua `calamine`.
-- Tự động bỏ qua file nhị phân (`.jpg`, `.exe`, `.zip`, ...) để tránh kết quả rác.
+> **Indexes created with redb 2.6.x are no longer compatible.**
+>
+> This release upgrades the embedded database from redb 2.6.3 to redb 4.1.0, which introduces
+> a new file format (v3). Existing index files (`deepsearch_index.redb`) built with a previous
+> version of DeepSearch **will not be read correctly** and may cause a startup error.
+>
+> **Action required:** Delete the old index file and re-index your folders from scratch.
 
 ---
 
-### 🚀 Cải tiến & Tái cấu trúc
+### ✨ New Features
 
-#### Nâng cấp redb 2.6.3 → 4.1.0
-Nâng cấp thư viện cơ sở dữ liệu nhúng lên phiên bản mới nhất mang lại:
-- **~15% nhanh hơn** khi đọc concurrent từ nhiều thread.
-- **~1.5x nhanh hơn** tốc độ ghi tổng quát.
-- File DB tối thiểu giảm từ ~2.5 MB xuống còn ~50 KB.
-- Nhiều bug data corruption và memory leak nghiêm trọng được vá.
+#### Live Search
+In addition to the traditional "Indexed Search", users can now search directly inside any
+folder without building an index first.
 
-#### Kiến trúc quét file
-- **Giữ lại "2-phase scan":** Dùng `walkdir` để khám phá thư mục và `rayon` để xử lý song song — thống nhất cho tất cả tác vụ (Initial Scan, Rescan, Live Search).
-- **Rescan an toàn hơn:** Quy trình 3 bước (`scan → write temp table → atomic swap`), đảm bảo chỉ mục hiện có không bị hỏng nếu quá trình bị gián đoạn.
+- **Activation:** In the "Search" tab, check "Live Search in Folder".
+- **Two modes:**
+  1. **Filename search (default):** Ultra-fast, matches only against file names.
+  2. **Content search:** Check "Search in file content" to search inside file contents.
 
-#### Tìm kiếm nhất quán
-- Logic tìm kiếm tên file của Live Search hoạt động theo cơ chế **token-based**, giống Indexed Search — kết quả nhất quán giữa hai chế độ.
-- `contains_all_tokens` được trừu tượng hóa và dùng chung.
+#### Multi-format Content Search
+- **PDF** (`pdf-extract`): Results include page number `[Page X]`.
+- **Microsoft Word** (`.docx`): Supported via `docx-rs`.
+- **Microsoft Excel** (`.xlsx`): Supported via `calamine`.
+- Binary files (`.jpg`, `.exe`, `.zip`, …) are automatically skipped to avoid garbage results.
+
+---
+
+### 🚀 Improvements & Refactoring
+
+#### Upgrade redb 2.6.3 → 4.1.0
+- **~15% faster** concurrent reads from multiple threads.
+- **~1.5× faster** general write throughput.
+- Minimum database file size reduced from ~2.5 MB to ~50 KB.
+- Numerous critical data-corruption and memory-leak bugs patched upstream.
+
+#### File scan architecture
+- **Unified 2-phase scan:** `walkdir` for directory discovery + `rayon` for parallel processing,
+  used consistently across all tasks (Initial Scan, Rescan, Live Search).
+- **Safer Rescan:** Three-step workflow (`scan → write temp table → atomic swap`) ensures the
+  existing index is never corrupted if the process is interrupted mid-way.
+
+#### Consistent search logic
+- Live Search filename matching now uses the same **token-based** algorithm as Indexed Search,
+  producing consistent results across both modes.
+- `contains_all_tokens` extracted as shared utility.
 
 #### Code quality — Clippy pedantic
-Toàn bộ codebase được làm sạch với `cargo clippy -D clippy::all -D clippy::pedantic` (63 lỗi đã fix):
-- `ref_option`: Đổi `&Option<T>` → `Option<&T>` trong các hàm utility để tối ưu borrow.
-- `non_std_lazy_statics`: Loại bỏ dependency `once_cell`, dùng `std::sync::LazyLock` (stable từ Rust 1.80).
-- `unnested_or_patterns`, `uninlined_format_args`, `map_unwrap_or`, `implicit_clone`, `redundant_closure`, `if_not_else`, `derivable_impls`, `manual_string_new`, `default_trait_access`, `doc_markdown`, `case_sensitive_file_extension_comparisons`.
-- Xóa dependency `once_cell` khỏi `Cargo.toml`.
+All 63 warnings from `cargo clippy -D clippy::all -D clippy::pedantic` resolved:
+- `ref_option`: Changed `&Option<T>` → `Option<&T>` in utility function signatures.
+- `non_std_lazy_statics`: Removed `once_cell` dependency; replaced with `std::sync::LazyLock`
+  (stable since Rust 1.80).
+- Additional lints fixed: `unnested_or_patterns`, `uninlined_format_args`, `map_unwrap_or`,
+  `implicit_clone`, `redundant_closure`, `if_not_else`, `derivable_impls`, `manual_string_new`,
+  `default_trait_access`, `doc_markdown`, `case_sensitive_file_extension_comparisons`.
+- Removed `once_cell` from `Cargo.toml`.
 
 ---
 
-### 🐞 Sửa lỗi
+### 🐞 Bug Fixes
 
-- Live Search không còn cộng dồn kết quả giữa các phiên tìm kiếm khác nhau.
-- Sửa lỗi kết quả tìm kiếm theo tên file không hiển thị trên giao diện.
-- Sửa lỗi hiển thị kết quả PDF (định dạng rõ ràng hơn).
-- Sửa lỗi so sánh phần mở rộng file không phân biệt hoa/thường (`.pdf` → `.PDF` nay được nhận diện đúng).
-
----
-
-## [1.2.0] - 2025-xx-xx
-
-- Phiên bản ổn định trước đó.
+- Live Search no longer accumulates results across separate search sessions.
+- Fixed filename search results not appearing in the UI.
+- Fixed PDF result display formatting.
+- Fixed case-sensitive file extension comparison — `.PDF`, `.Pdf` etc. are now correctly matched.
 
 ---
+
+## [1.2.0]
+
+- Previous stable release.
 
 ## [1.1.0]
 
-- Xem git log để biết chi tiết.
+- See git log for details.
 
 ## [1.0.0]
 
-- Phát hành lần đầu.
+- Initial release.
