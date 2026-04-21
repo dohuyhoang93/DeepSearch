@@ -41,8 +41,10 @@ cp "$PLIST_SRC" "$APP_BUNDLE_PATH/Contents/Info.plist"
 
 # 5. Create the .icns file from the source icon
 echo "Creating .icns file..."
-# Create a temporary iconset directory
-ICONSET_DIR=$(mktemp -d)
+# iconutil requires the directory to end with .iconset
+TMPDIR_PARENT=$(mktemp -d)
+ICONSET_DIR="$TMPDIR_PARENT/icon.iconset"
+mkdir "$ICONSET_DIR"
 # Create different sizes required for the .icns file using sips
 sips -z 16 16     "$ICON_SRC" --out "$ICONSET_DIR/icon_16x16.png"
 sips -z 32 32     "$ICON_SRC" --out "$ICONSET_DIR/icon_16x16@2x.png"
@@ -57,7 +59,7 @@ sips -z 1024 1024 "$ICON_SRC" --out "$ICONSET_DIR/icon_512x512@2x.png"
 # Convert the iconset to an .icns file
 iconutil -c icns "$ICONSET_DIR" -o "$APP_BUNDLE_PATH/Contents/Resources/icon.icns"
 # Clean up the temporary directory
-rm -rf "$ICONSET_DIR"
+rm -rf "$TMPDIR_PARENT"
 
 echo ""
 echo "Successfully created $APP_BUNDLE_PATH"
