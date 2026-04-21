@@ -2,6 +2,10 @@
 name = "DeepSearch"
 version = "1.2.1"
 edition = "2021"
+description = "A fast desktop file indexing and search tool with live search and content search support"
+authors = ["dohuyhoang93"]
+license = "MIT"
+repository = "https://github.com/dohuyhoang93/DeepSearch"
 
 [dependencies]
 rayon = "1.10.0"
