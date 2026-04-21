@@ -3,9 +3,8 @@ use std::sync::LazyLock;
 use std::collections::HashMap;
 use unicode_normalization::char::is_combining_mark;
 use unicode_normalization::UnicodeNormalization;
-use crate::gui::events::GuiUpdate;
+use crate::gui::events::{GuiUpdate, GuiSender};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::Sender;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 use walkdir::WalkDir;
@@ -58,13 +57,13 @@ pub fn normalize_string(s: &str) -> String {
 
 // --- Filesystem Scan Helpers ---
 
-pub fn report_progress(reporter: Option<&Sender<GuiUpdate>>, progress: f32, message: &str) {
+pub fn report_progress(reporter: Option<&GuiSender>, progress: f32, message: &str) {
     if let Some(sender) = reporter {
         sender.send(GuiUpdate::ScanProgress(progress, message.to_string())).ok();
     }
 }
 
-pub fn discover_fs_structure(root_path: &Path, reporter: Option<&Sender<GuiUpdate>>) -> (Vec<walkdir::DirEntry>, Vec<PathBuf>) {
+pub fn discover_fs_structure(root_path: &Path, reporter: Option<&GuiSender>) -> (Vec<walkdir::DirEntry>, Vec<PathBuf>) {
     report_progress(reporter, 0.01, "Phase 1/2: Discovering directories...");
     let top_level_entries: Vec<_> = WalkDir::new(root_path)
         .min_depth(1)
@@ -86,7 +85,7 @@ pub fn discover_fs_structure(root_path: &Path, reporter: Option<&Sender<GuiUpdat
 /// It encapsulates the logic of discovering, iterating, and checking the controller state.
 pub fn controlled_two_phase_scan<F>(
     root_path: &Path,
-    reporter: Option<&Sender<GuiUpdate>>,
+    reporter: Option<&GuiSender>,
     controller: &Arc<TaskController>,
     action: F,
 )

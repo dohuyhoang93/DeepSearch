@@ -70,6 +70,10 @@ All 63 warnings from `cargo clippy -D clippy::all -D clippy::pedantic` resolved:
 
 ### 🐞 Bug Fixes
 
+- **UI freeze fixed:** Search results and index updates now appear instantly without requiring
+  mouse movement. Implemented egui's recommended push-based repaint pattern: background thread
+  calls `ctx.request_repaint()` after every `GuiUpdate` send via a new `GuiSender` wrapper,
+  replacing the previous polling loop.
 - Live Search no longer accumulates results across separate search sessions.
 - Fixed filename search results not appearing in the UI.
 - Fixed PDF result display formatting.

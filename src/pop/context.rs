@@ -1,6 +1,6 @@
-use crate::gui::events::GuiUpdate;
+use crate::gui::events::GuiSender;
 use crate::pop::control::TaskController;
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc::Receiver;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -8,7 +8,7 @@ use std::sync::Arc;
 pub struct Context {
     pub search_keyword: Option<String>,
 
-    pub progress_reporter: Option<Sender<GuiUpdate>>,
+    pub progress_reporter: Option<GuiSender>,
     pub live_search_root_path: Option<PathBuf>,
     pub search_in_content: bool,
     pub search_in_pdf: bool,

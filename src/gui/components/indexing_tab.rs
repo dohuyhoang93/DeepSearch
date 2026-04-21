@@ -101,6 +101,8 @@ impl IndexingTab {
         match dialog_result {
             Some(true) => {
                 if let Some(path) = self.confirming_delete.take() {
+                    state.is_running_task = true;
+                    state.current_status = "Deleting index...".to_string();
                     command_sender.send(Command::DeleteLocation(path)).unwrap();
                 }
             }

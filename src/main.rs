@@ -106,6 +106,8 @@ fn main() -> anyhow::Result<()> {
                 gui::app::DeepSearchApp::default()
             };
 
+            app.set_repaint_ctx(cc.egui_ctx.clone());
+
             // --- Load Background Texture ---
             let texture_handle = {
                 let image_bytes = include_bytes!("../assets/background.png");

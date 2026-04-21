@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::thread;
 use eframe::egui;
 use crate::db::DbManager;
@@ -13,7 +13,7 @@ use crate::pop::control::TaskController;
 use crate::pop::engine::Engine;
 use crate::pop::registry::Registry;
 use crate::processes;
-use super::events::{Command, GuiUpdate};
+use super::events::{Command, GuiUpdate, GuiSender};
 
 #[derive(PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum Tab {
@@ -66,6 +66,9 @@ pub struct DeepSearchApp {
     update_receiver: Receiver<GuiUpdate>,
 
     #[serde(skip)]
+    repaint_ctx: Arc<OnceLock<egui::Context>>,
+
+    #[serde(skip)]
     pub background_texture: Option<egui::TextureHandle>,
 }
 
@@ -74,6 +77,8 @@ impl Default for DeepSearchApp {
     fn default() -> Self {
         let (command_sender, command_receiver) = mpsc::channel();
         let (update_sender, update_receiver) = mpsc::channel();
+        let repaint_ctx = Arc::new(OnceLock::new());
+        let thread_repaint_ctx = repaint_ctx.clone();
 
         thread::spawn(move || {
             let mut registry = Registry::new();
@@ -91,12 +96,13 @@ impl Default for DeepSearchApp {
 
             let engine = Engine::new(registry);
             let db_path = PathBuf::from("deepsearch_index.redb");
+            let gui_sender = GuiSender::new(update_sender, thread_repaint_ctx);
 
             for command in command_receiver {
                 let mut context = Context {
                     search_keyword: None,
 
-                    progress_reporter: Some(update_sender.clone()),
+                    progress_reporter: Some(gui_sender.clone()),
                     live_search_root_path: None,
                     search_in_content: false,
                     search_in_pdf: false,
@@ -121,37 +127,37 @@ impl Default for DeepSearchApp {
                                     let count = db_manager.get_table_len(&table_name).unwrap_or(0);
                                     locations_with_counts.push((path, table_name, count));
                                 }
-                                update_sender.send(GuiUpdate::LocationsUpdated(locations_with_counts)).unwrap();
+                                gui_sender.send(GuiUpdate::LocationsUpdated(locations_with_counts)).unwrap();
                             }
                         }
                     }
                     Command::OpenFile(path) => {
                         if let Err(e) = open::that(&path) {
-                            update_sender.send(GuiUpdate::Error(format!("Failed to open file {path}: {e}"))).unwrap();
+                            gui_sender.send(GuiUpdate::Error(format!("Failed to open file {path}: {e}"))).unwrap();
                         }
                     }
                     Command::OpenLocation(path) => {
                         let parent_dir = Path::new(&path).parent().unwrap_or_else(|| Path::new("."));
                         if let Err(e) = open::that(parent_dir) {
-                            update_sender.send(GuiUpdate::Error(format!("Failed to open location for {path}: {e}"))).unwrap();
+                            gui_sender.send(GuiUpdate::Error(format!("Failed to open location for {path}: {e}"))).unwrap();
                         }
                     }
                     Command::DeleteLocation(path) => {
                         if let Ok(db_manager) = DbManager::new(&db_path) {
                             if let Err(e) = db_manager.delete_location(&path) {
-                                update_sender.send(GuiUpdate::Error(format!("Failed to delete {path}: {e}"))).unwrap();
+                                gui_sender.send(GuiUpdate::Error(format!("Failed to delete {path}: {e}"))).unwrap();
                             }
                         }
-                        update_sender.send(GuiUpdate::ScanCompleted(0)).unwrap();
+                        gui_sender.send(GuiUpdate::ScanCompleted(0)).unwrap();
                     }
                     Command::StartInitialScan { path, task_controller } => {
                         context.target_path = Some(path);
                         context.task_controller = Some(task_controller);
                         match engine.run_workflow("gui_initial_scan", context) {
                             Ok(final_context) => {
-                                update_sender.send(GuiUpdate::ScanCompleted(final_context.files_found_count)).unwrap();
+                                gui_sender.send(GuiUpdate::ScanCompleted(final_context.files_found_count)).unwrap();
                             }
-                            Err(e) => update_sender.send(GuiUpdate::Error(e.to_string())).unwrap(),
+                            Err(e) => gui_sender.send(GuiUpdate::Error(e.to_string())).unwrap(),
                         }
                     }
                     Command::StartRescan { path, task_controller } => {
@@ -159,9 +165,9 @@ impl Default for DeepSearchApp {
                         context.task_controller = Some(task_controller);
                         match engine.run_workflow("gui_rescan", context) {
                             Ok(final_context) => {
-                                update_sender.send(GuiUpdate::ScanCompleted(final_context.files_found_count)).unwrap();
+                                gui_sender.send(GuiUpdate::ScanCompleted(final_context.files_found_count)).unwrap();
                             }
-                            Err(e) => update_sender.send(GuiUpdate::Error(e.to_string())).unwrap(),
+                            Err(e) => gui_sender.send(GuiUpdate::Error(e.to_string())).unwrap(),
                         }
                     }
                     Command::StartSearch { locations, keyword, is_live_search_active, live_search_path, search_in_content, search_in_pdf, search_in_office, search_in_plain_text, task_controller } => {
@@ -174,12 +180,12 @@ impl Default for DeepSearchApp {
                         if is_live_search_active {
                             context.live_search_root_path = live_search_path;
                             if let Err(e) = engine.run_workflow("gui_live_search", context) {
-                                update_sender.send(GuiUpdate::Error(e.to_string())).unwrap();
+                                gui_sender.send(GuiUpdate::Error(e.to_string())).unwrap();
                             }
                         } else {
                             context.search_locations = Some(locations);
                             if let Err(e) = engine.run_workflow("gui_search", context) {
-                                update_sender.send(GuiUpdate::Error(e.to_string())).unwrap();
+                                gui_sender.send(GuiUpdate::Error(e.to_string())).unwrap();
                             }
                         }
                     }
@@ -192,6 +198,7 @@ impl Default for DeepSearchApp {
         Self {
             command_sender,
             update_receiver,
+            repaint_ctx,
             active_tab: Tab::Indexing,
             state: AppState::default(),
             menu_bar: MenuBar::default(),
@@ -203,11 +210,18 @@ impl Default for DeepSearchApp {
     }
 }
 
+impl DeepSearchApp {
+    pub fn set_repaint_ctx(&self, ctx: egui::Context) {
+        self.repaint_ctx.set(ctx).ok();
+    }
+}
+
 impl eframe::App for DeepSearchApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
+    #[allow(clippy::too_many_lines)]
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // --- Handle Updates from Backend Thread ---
         while let Ok(update) = self.update_receiver.try_recv() {

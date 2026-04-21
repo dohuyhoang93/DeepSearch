@@ -1,12 +1,11 @@
 use crate::db::{DbManager, FileMetadata};
 use crate::pop::context::Context;
-use crate::gui::events::GuiUpdate;
-use std::sync::mpsc::Sender;
+use crate::gui::events::{GuiUpdate, GuiSender};
 
 const BATCH_SIZE: usize = 50_000;
 
 /// A helper function to send progress updates if a reporter is available.
-fn report_progress(reporter: Option<&Sender<GuiUpdate>>, progress: f32, message: &str) {
+fn report_progress(reporter: Option<&GuiSender>, progress: f32, message: &str) {
     if let Some(sender) = reporter {
         sender.send(GuiUpdate::ScanProgress(progress, message.to_string())).ok();
     }

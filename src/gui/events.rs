@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
+use std::sync::OnceLock;
+use eframe::egui;
 use crate::pop::control::TaskController;
 
 pub enum Command {
@@ -44,4 +47,26 @@ pub struct LiveSearchResult {
 pub struct DisplayResult {
     pub full_path: Arc<str>,
     pub icon: String,
+}
+
+/// Wraps `Sender<GuiUpdate>` to automatically call `ctx.request_repaint()` after each send,
+/// enabling push-based UI updates from background threads without polling.
+#[derive(Clone)]
+pub struct GuiSender {
+    sender: Sender<GuiUpdate>,
+    repaint_ctx: Arc<OnceLock<egui::Context>>,
+}
+
+impl GuiSender {
+    pub fn new(sender: Sender<GuiUpdate>, repaint_ctx: Arc<OnceLock<egui::Context>>) -> Self {
+        Self { sender, repaint_ctx }
+    }
+
+    pub fn send(&self, msg: GuiUpdate) -> Result<(), std::sync::mpsc::SendError<GuiUpdate>> {
+        let result = self.sender.send(msg);
+        if let Some(ctx) = self.repaint_ctx.get() {
+            ctx.request_repaint();
+        }
+        result
+    }
 }
