@@ -7,6 +7,7 @@ use crate::gui::app::AppState;
 use crate::gui::events::{Command, DisplayResult, LiveSearchResult};
 use crate::pop::control::TaskController;
 
+#[allow(clippy::struct_excessive_bools)]
 pub struct SearchTab {
     pub search_keyword: String,
     pub search_scope: HashMap<String, bool>,
@@ -23,10 +24,10 @@ pub struct SearchTab {
 impl Default for SearchTab {
     fn default() -> Self {
         Self {
-            search_keyword: "".to_owned(),
+            search_keyword: String::new(),
             search_scope: HashMap::new(),
             search_results: vec![],
-            live_search_path_input: "".to_owned(),
+            live_search_path_input: String::new(),
             live_search_results: vec![],
             is_live_search_active: false,
             live_search_in_content: false,
@@ -200,7 +201,9 @@ impl SearchTab {
             egui::ScrollArea::vertical().show_rows(ui, text_height, self.live_search_results.len(), |ui, row_range| {
                 for i in row_range {
                     if let Some(result) = self.live_search_results.get(i) {
-                        let display_text = if result.file_path.ends_with(".pdf") {
+                        let display_text = if std::path::Path::new(&result.file_path)
+                            .extension()
+                            .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf")) {
                             format!("{} [Page {}] - {}", result.file_path, result.line_number, result.line_content)
                         } else {
                             format!("{} [Line {}] - {}", result.file_path, result.line_number, result.line_content)
@@ -232,8 +235,8 @@ impl SearchTab {
         }
     }
 
-    fn draw_indexed_search_results(&self, ui: &mut egui::Ui, _state: &AppState, command_sender: &Sender<Command>) {
-        if self.search_results.is_empty() && !_state.is_running_task {
+    fn draw_indexed_search_results(&self, ui: &mut egui::Ui, state: &AppState, command_sender: &Sender<Command>) {
+        if self.search_results.is_empty() && !state.is_running_task {
             ui.add_space(10.0);
             ui.vertical_centered(|ui| {
                     if self.search_keyword.is_empty() {
@@ -243,16 +246,17 @@ impl SearchTab {
                     }
             });
         } else {
-            let text_height = ui.text_style_height(&egui::TextStyle::Body) + 8.0;
             const WIDE_CHAR_APPROX_WIDTH: f32 = 10.0;
+            let text_height = ui.text_style_height(&egui::TextStyle::Body) + 8.0;
 
             egui::ScrollArea::vertical().show_rows(ui, text_height, self.search_results.len(), |ui, row_range| {
                 let available_width = ui.available_width();
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 let num_chars_to_keep = (available_width / WIDE_CHAR_APPROX_WIDTH).floor() as usize;
 
                 for i in row_range {
                     if let Some(result) = self.search_results.get(i) {
-                        let truncated_path = self.truncate_path(&result.full_path, num_chars_to_keep);
+                        let truncated_path = SearchTab::truncate_path(&result.full_path, num_chars_to_keep);
                         let display_text = format!("{} {}", result.icon, truncated_path);
                         
                         egui::Frame::default()
@@ -281,7 +285,7 @@ impl SearchTab {
         }
     }
 
-    fn truncate_path(&self, path: &str, max_chars: usize) -> String {
+    fn truncate_path(path: &str, max_chars: usize) -> String {
         if path.chars().count() <= max_chars {
             return path.to_string();
         }
@@ -292,6 +296,6 @@ impl SearchTab {
         let truncated_chars: String = path.chars().rev().take(max_chars.saturating_sub(4)).collect();
         let truncated_path = truncated_chars.chars().rev().collect::<String>();
 
-        format!("...{}", truncated_path)
+        format!("...{truncated_path}")
     }
 }

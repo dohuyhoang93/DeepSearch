@@ -14,11 +14,11 @@ impl Engine {
     /// Executes a workflow sequentially.
     pub fn run_workflow(&self, workflow_name: &str, mut context: Context) -> anyhow::Result<Context> {
         let workflow = self.registry.get_workflow(workflow_name)
-            .ok_or_else(|| anyhow::anyhow!("Workflow '{}' not found", workflow_name))?;
+            .ok_or_else(|| anyhow::anyhow!("Workflow '{workflow_name}' not found"))?;
 
         for process_name in workflow {
             let process: &Process = self.registry.get_process(process_name)
-                .ok_or_else(|| anyhow::anyhow!("Process '{}' not found in registry", process_name))?;
+                .ok_or_else(|| anyhow::anyhow!("Process '{process_name}' not found in registry"))?;
             
             // Execute the process and update the context
             context = process(context)?;

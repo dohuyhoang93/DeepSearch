@@ -6,7 +6,7 @@ use std::sync::mpsc::Sender;
 const BATCH_SIZE: usize = 50_000;
 
 /// A helper function to send progress updates if a reporter is available.
-fn report_progress(reporter: &Option<Sender<GuiUpdate>>, progress: f32, message: &str) {
+fn report_progress(reporter: Option<&Sender<GuiUpdate>>, progress: f32, message: &str) {
     if let Some(sender) = reporter {
         sender.send(GuiUpdate::ScanProgress(progress, message.to_string())).ok();
     }
@@ -14,7 +14,7 @@ fn report_progress(reporter: &Option<Sender<GuiUpdate>>, progress: f32, message:
 
 /// Process: Reads file data from the stream in the context and writes it to the DB in batches.
 pub fn write_index_from_stream_batched(mut context: Context) -> anyhow::Result<Context> {
-    let reporter = &context.progress_reporter;
+    let reporter = context.progress_reporter.as_ref();
     let db_path = context.db_path.as_ref().unwrap();
     let target_path = context.target_path.as_ref().unwrap().to_str().unwrap();
     let rx = context.file_data_stream.take().unwrap(); // Take ownership of the receiver
@@ -32,7 +32,7 @@ pub fn write_index_from_stream_batched(mut context: Context) -> anyhow::Result<C
         total_indexed_count += 1;
         if batch.len() >= BATCH_SIZE {
             db_manager.write_to_table(&table_name, &batch)?;
-            report_progress(reporter, 0.90, &format!("⚙️ Indexed {} files...", total_indexed_count));
+            report_progress(reporter, 0.90, &format!("⚙️ Indexed {total_indexed_count} files..."));
             batch.clear();
         }
     }
@@ -40,7 +40,7 @@ pub fn write_index_from_stream_batched(mut context: Context) -> anyhow::Result<C
     // Write any remaining files in the last batch
     if !batch.is_empty() {
         db_manager.write_to_table(&table_name, &batch)?;
-        report_progress(reporter, 0.99, &format!("⚙️ Indexed {} files, finalizing...", total_indexed_count));
+        report_progress(reporter, 0.99, &format!("⚙️ Indexed {total_indexed_count} files, finalizing..."));
     }
 
     context.files_found_count = total_indexed_count;
@@ -49,7 +49,7 @@ pub fn write_index_from_stream_batched(mut context: Context) -> anyhow::Result<C
 
 /// Process: Reads file data from the stream in the context and writes it to the new DB table for rescan.
 pub fn rescan_write_index_from_stream_batched(mut context: Context) -> anyhow::Result<Context> {
-    let reporter = &context.progress_reporter;
+    let reporter = context.progress_reporter.as_ref();
     let db_path = context.db_path.as_ref().unwrap();
     let _root_path = context.target_path.as_ref().unwrap().to_str().unwrap();
     let new_table_name = context.new_table_name.as_ref().unwrap();
@@ -66,7 +66,7 @@ pub fn rescan_write_index_from_stream_batched(mut context: Context) -> anyhow::R
         total_indexed_count += 1;
         if batch.len() >= BATCH_SIZE {
             db_manager.write_to_table(new_table_name, &batch)?;
-            report_progress(reporter, 0.33, &format!("🔄 Rescan Phase 2/3: Indexed {} files...", total_indexed_count));
+            report_progress(reporter, 0.33, &format!("🔄 Rescan Phase 2/3: Indexed {total_indexed_count} files..."));
             batch.clear();
         }
     }
@@ -74,7 +74,7 @@ pub fn rescan_write_index_from_stream_batched(mut context: Context) -> anyhow::R
     // Write any remaining files in the last batch
     if !batch.is_empty() {
         db_manager.write_to_table(new_table_name, &batch)?;
-        report_progress(reporter, 0.66, &format!("🔄 Rescan Phase 2/3: Indexed {} files, finalizing...", total_indexed_count));
+        report_progress(reporter, 0.66, &format!("🔄 Rescan Phase 2/3: Indexed {total_indexed_count} files, finalizing..."));
     }
 
     context.files_found_count = total_indexed_count;

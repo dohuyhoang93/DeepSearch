@@ -14,6 +14,7 @@ const BATCH_SIZE: usize = 1;
 
 /// Process: Scans a directory using the 2-phase method and searches on the fly, streaming results.
 /// This version uses the `controlled_two_phase_scan` helper for a clean, reusable implementation.
+#[allow(clippy::too_many_lines)]
 pub fn live_search_2_phase(mut context: Context) -> Result<Context> {
     let root_path = context.live_search_root_path.take().ok_or_else(|| anyhow::anyhow!("Live search path not provided"))?;
     let search_keyword = context.search_keyword.take().ok_or_else(|| anyhow::anyhow!("Search keyword not provided"))?;
@@ -25,7 +26,7 @@ pub fn live_search_2_phase(mut context: Context) -> Result<Context> {
     let reporter = context.progress_reporter.take().ok_or_else(|| anyhow::anyhow!("Reporter not available"))?;
     let controller = context.task_controller.take().ok_or_else(|| anyhow::anyhow!("Task controller not available"))?;
 
-    utils::report_progress(&Some(reporter.clone()), 0.0, &format!("🔍 Starting 2-phase live search for '{}' in '{}'...", search_keyword, root_path.display()));
+    utils::report_progress(Some(&reporter), 0.0, &format!("🔍 Starting 2-phase live search for '{}' in '{}'...", search_keyword, root_path.display()));
 
     thread::spawn(move || {
         let live_results_batch = Arc::new(Mutex::new(Vec::with_capacity(BATCH_SIZE)));
@@ -96,10 +97,10 @@ pub fn live_search_2_phase(mut context: Context) -> Result<Context> {
                     }
                     Some("xlsx") if search_in_office => {
                         if let Ok(mut workbook) = open_workbook::<Xlsx<_>, _>(entry.path()) {
-                            for sheet_name in workbook.sheet_names().to_owned() {
+                            for sheet_name in workbook.sheet_names().clone() {
                                 if let Ok(range) = workbook.worksheet_range(&sheet_name) {
                                     for (i, row) in range.rows().enumerate() {
-                                        let row_text: String = row.iter().map(|cell| cell.to_string()).collect::<Vec<_>>().join(" | ");
+                                        let row_text: String = row.iter().map(ToString::to_string).collect::<Vec<_>>().join(" | ");
                                         if row_text.contains(&search_keyword) {
                                             let result = LiveSearchResult {
                                                 file_path: entry.path().to_string_lossy().to_string(),
@@ -117,7 +118,7 @@ pub fn live_search_2_phase(mut context: Context) -> Result<Context> {
                             }
                         }
                     }
-                    Some("txt") | Some("md") | Some("log") | Some("rs") | Some("py") | Some("js") | Some("html") | Some("css") | Some("json") | Some("xml") | Some("toml") if search_in_plain_text => {
+                    Some("txt" | "md" | "log" | "rs" | "py" | "js" | "html" | "css" | "json" | "xml" | "toml") if search_in_plain_text => {
                         if let Ok(file) = File::open(entry.path()) {
                             let reader = BufReader::new(file);
                             for (line_number, line) in reader.lines().enumerate() {
@@ -158,7 +159,7 @@ pub fn live_search_2_phase(mut context: Context) -> Result<Context> {
         };
 
         // Single call to the new, unified, controllable scanning utility.
-        utils::controlled_two_phase_scan(&root_path, &Some(reporter.clone()), &controller, search_action);
+        utils::controlled_two_phase_scan(&root_path, Some(&reporter), &controller, search_action);
 
         // Send any remaining results
         let mut live_batch = live_results_batch.lock().unwrap();

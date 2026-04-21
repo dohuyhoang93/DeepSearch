@@ -12,7 +12,7 @@ pub fn search_index(mut context: Context) -> anyhow::Result<Context> {
     let reporter = context.progress_reporter.as_ref().unwrap();
 
     let normalized_keyword = utils::normalize_string(raw_keyword);
-    reporter.send(GuiUpdate::ScanProgress(0.0, format!("🔍 Searching for '{}'...", raw_keyword)))?;
+    reporter.send(GuiUpdate::ScanProgress(0.0, format!("🔍 Searching for '{raw_keyword}'...")))?;
 
     let db_manager = DbManager::new(db_path)?;
     let locations_to_search = std::mem::take(&mut context.search_locations);
@@ -28,7 +28,8 @@ pub fn search_index(mut context: Context) -> anyhow::Result<Context> {
         }
 
         for (i, (location_path, table_name)) in locations_to_search.iter().enumerate() {
-            reporter.send(GuiUpdate::ScanProgress(i as f32 / num_locations as f32, format!("Searching in {}...", location_path)))?;
+            #[allow(clippy::cast_precision_loss)]
+            reporter.send(GuiUpdate::ScanProgress(i as f32 / num_locations as f32, format!("Searching in {location_path}...")))?;
             
             let found_paths = db_manager.search_in_table(table_name, &normalized_keyword)?;
 

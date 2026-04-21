@@ -5,7 +5,7 @@ use crate::gui::app::AppState;
 pub struct StatusBar;
 
 impl StatusBar {
-    pub fn ui(&self, ui: &mut egui::Ui, state: &AppState) {
+    pub fn ui(ui: &mut egui::Ui, state: &AppState) {
         ui.add_space(5.0);
         //ui.separator();
         ui.horizontal(|ui| {

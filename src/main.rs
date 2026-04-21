@@ -103,7 +103,7 @@ fn main() -> anyhow::Result<()> {
             let mut app: gui::app::DeepSearchApp = if let Some(storage) = cc.storage {
                 eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
             } else {
-                Default::default()
+                gui::app::DeepSearchApp::default()
             };
 
             // --- Load Background Texture ---
@@ -119,7 +119,7 @@ fn main() -> anyhow::Result<()> {
             Ok(Box::new(app))
         }),
     )
-    .map_err(|e| anyhow::anyhow!("Eframe error: {}", e))?;
+    .map_err(|e| anyhow::anyhow!("Eframe error: {e}"))?;
 
     Ok(())
 }

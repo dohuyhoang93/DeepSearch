@@ -70,6 +70,7 @@ pub struct DeepSearchApp {
 }
 
 impl Default for DeepSearchApp {
+    #[allow(clippy::too_many_lines)]
     fn default() -> Self {
         let (command_sender, command_receiver) = mpsc::channel();
         let (update_sender, update_receiver) = mpsc::channel();
@@ -126,19 +127,19 @@ impl Default for DeepSearchApp {
                     }
                     Command::OpenFile(path) => {
                         if let Err(e) = open::that(&path) {
-                            update_sender.send(GuiUpdate::Error(format!("Failed to open file {}: {}", path, e))).unwrap();
+                            update_sender.send(GuiUpdate::Error(format!("Failed to open file {path}: {e}"))).unwrap();
                         }
                     }
                     Command::OpenLocation(path) => {
                         let parent_dir = Path::new(&path).parent().unwrap_or_else(|| Path::new("."));
                         if let Err(e) = open::that(parent_dir) {
-                            update_sender.send(GuiUpdate::Error(format!("Failed to open location for {}: {}", path, e))).unwrap();
+                            update_sender.send(GuiUpdate::Error(format!("Failed to open location for {path}: {e}"))).unwrap();
                         }
                     }
                     Command::DeleteLocation(path) => {
                         if let Ok(db_manager) = DbManager::new(&db_path) {
                             if let Err(e) = db_manager.delete_location(&path) {
-                                update_sender.send(GuiUpdate::Error(format!("Failed to delete {}: {}", path, e))).unwrap();
+                                update_sender.send(GuiUpdate::Error(format!("Failed to delete {path}: {e}"))).unwrap();
                             }
                         }
                         update_sender.send(GuiUpdate::ScanCompleted(0)).unwrap();
@@ -226,7 +227,7 @@ impl eframe::App for DeepSearchApp {
                 GuiUpdate::ScanCompleted(count) => {
                     self.state.is_running_task = false;
                     self.state.scan_progress = 1.0;
-                    self.state.current_status = format!("✅ Scan completed. Indexed {} files.", count);
+                    self.state.current_status = format!("✅ Scan completed. Indexed {count} files.");
                     self.command_sender.send(Command::FetchLocations).unwrap();
                 }
                 GuiUpdate::SearchResultsBatch(results) => {
@@ -242,7 +243,7 @@ impl eframe::App for DeepSearchApp {
                 }
                 GuiUpdate::Error(e) => {
                     self.state.is_running_task = false;
-                    self.state.current_status = format!("Error: {}", e);
+                    self.state.current_status = format!("Error: {e}");
                 }
             }
         }
@@ -317,7 +318,7 @@ impl eframe::App for DeepSearchApp {
                 .inner_margin(egui::Margin { left: 16, right: 16, top: 10, bottom: 10 })
                 .fill(panel_fill))
             .show(ctx, |ui| {
-                self.status_bar.ui(ui, &self.state);
+                StatusBar::ui(ui, &self.state);
             });
 
         // --- Main Content ---

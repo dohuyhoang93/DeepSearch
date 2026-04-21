@@ -1,5 +1,5 @@
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::collections::HashMap;
 use unicode_normalization::char::is_combining_mark;
 use unicode_normalization::UnicodeNormalization;
@@ -15,7 +15,7 @@ use crate::pop::control::TaskController;
 
 // --- String Normalization Helpers ---
 
-static VIETNAMESE_CHAR_MAP: Lazy<HashMap<char, char>> = Lazy::new(|| {
+static VIETNAMESE_CHAR_MAP: LazyLock<HashMap<char, char>> = LazyLock::new(|| {
     let mut map = HashMap::new();
     let pairs = [
         ('à', 'a'), ('á', 'a'), ('ạ', 'a'), ('ả', 'a'), ('ã', 'a'),
@@ -58,13 +58,13 @@ pub fn normalize_string(s: &str) -> String {
 
 // --- Filesystem Scan Helpers ---
 
-pub fn report_progress(reporter: &Option<Sender<GuiUpdate>>, progress: f32, message: &str) {
+pub fn report_progress(reporter: Option<&Sender<GuiUpdate>>, progress: f32, message: &str) {
     if let Some(sender) = reporter {
         sender.send(GuiUpdate::ScanProgress(progress, message.to_string())).ok();
     }
 }
 
-pub fn discover_fs_structure(root_path: &Path, reporter: &Option<Sender<GuiUpdate>>) -> (Vec<walkdir::DirEntry>, Vec<PathBuf>) {
+pub fn discover_fs_structure(root_path: &Path, reporter: Option<&Sender<GuiUpdate>>) -> (Vec<walkdir::DirEntry>, Vec<PathBuf>) {
     report_progress(reporter, 0.01, "Phase 1/2: Discovering directories...");
     let top_level_entries: Vec<_> = WalkDir::new(root_path)
         .min_depth(1)
@@ -86,7 +86,7 @@ pub fn discover_fs_structure(root_path: &Path, reporter: &Option<Sender<GuiUpdat
 /// It encapsulates the logic of discovering, iterating, and checking the controller state.
 pub fn controlled_two_phase_scan<F>(
     root_path: &Path,
-    reporter: &Option<Sender<GuiUpdate>>,
+    reporter: Option<&Sender<GuiUpdate>>,
     controller: &Arc<TaskController>,
     action: F,
 )
@@ -126,10 +126,9 @@ where
 
         let processed_count = processed_subdirs.fetch_add(1, Ordering::SeqCst);
         if num_subdirs > 0 {
+            #[allow(clippy::cast_precision_loss)]
             let progress = 0.05 + (processed_count as f32 / num_subdirs as f32) * 0.40;
-            if let Some(sender) = reporter {
-                sender.send(GuiUpdate::ScanProgress(progress, format!("Scanning in {}...", subdir.display()))).ok();
-            }
+            report_progress(reporter, progress, &format!("Scanning in {}...", subdir.display()));
         }
     });
 }
@@ -151,17 +150,17 @@ pub fn get_icon_for_path(path: &str) -> &'static str {
         return "📁"; // Folder icon
     }
     match path_buf.extension().and_then(|s| s.to_str()) {
-        Some("txt") | Some("md") | Some("log") => "📄", // Text file
+        Some("txt" | "md" | "log") => "📄", // Text file
         Some("pdf") => "📃", // PDF
-        Some("doc") | Some("docx") => "📝", // Word document
-        Some("xls") | Some("xlsx") | Some("csv") => "📊", // Spreadsheet
-        Some("ppt") | Some("pptx") => " presentation", // Presentation
-        Some("zip") | Some("rar") | Some("7z") | Some("tar") | Some("gz") => "📦", // Archive
-        Some("jpg") | Some("jpeg") | Some("png") | Some("gif") | Some("bmp") | Some("svg") => "🖼️", // Image
-        Some("mp3") | Some("wav") | Some("flac") | Some("ogg") => "🎵", // Audio
-        Some("mp4") | Some("mkv") | Some("avi") | Some("mov") => "🎬", // Video
-        Some("exe") | Some("dll") | Some("bin") => "⚙️", // Executable/Binary
-        Some("rs") | Some("py") | Some("js") | Some("html") | Some("css") | Some("json") | Some("xml") => "💻", // Code
+        Some("doc" | "docx") => "📝", // Word document
+        Some("xls" | "xlsx" | "csv") => "📊", // Spreadsheet
+        Some("ppt" | "pptx") => " presentation", // Presentation
+        Some("zip" | "rar" | "7z" | "tar" | "gz") => "📦", // Archive
+        Some("jpg" | "jpeg" | "png" | "gif" | "bmp" | "svg") => "🖼️", // Image
+        Some("mp3" | "wav" | "flac" | "ogg") => "🎵", // Audio
+        Some("mp4" | "mkv" | "avi" | "mov") => "🎬", // Video
+        Some("exe" | "dll" | "bin") => "⚙️", // Executable/Binary
+        Some("rs" | "py" | "js" | "html" | "css" | "json" | "xml") => "💻", // Code
         _ => "🗄️", // Generic file
     }
 }

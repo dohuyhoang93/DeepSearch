@@ -4,6 +4,7 @@ use std::sync::mpsc::{Sender, Receiver};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[allow(clippy::struct_excessive_bools)]
 pub struct Context {
     pub search_keyword: Option<String>,
 

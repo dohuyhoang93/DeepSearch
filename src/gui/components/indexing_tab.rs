@@ -5,21 +5,14 @@ use crate::gui::app::AppState;
 use crate::gui::events::Command;
 use crate::pop::control::TaskController;
 
+#[derive(Default)]
 pub struct IndexingTab {
     pub target_path_input: String,
     pub confirming_delete: Option<String>,
 }
 
-impl Default for IndexingTab {
-    fn default() -> Self {
-        Self {
-            target_path_input: "".to_owned(),
-            confirming_delete: None,
-        }
-    }
-}
-
 impl IndexingTab {
+    #[allow(clippy::too_many_lines)]
     pub fn ui(&mut self, ui: &mut egui::Ui, state: &mut AppState, command_sender: &Sender<Command>) {
         // --- Top section for adding a new path ---
         ui.add_enabled_ui(!state.is_running_task, |ui| {
@@ -38,7 +31,9 @@ impl IndexingTab {
 
             ui.horizontal(|ui| {
                 if ui.button("Scan & Index").clicked() {
-                    if !self.target_path_input.is_empty() {
+                    if self.target_path_input.is_empty() {
+                        state.current_status = "Please select a path to index.".to_string();
+                    } else {
                         state.is_running_task = true;
                         state.scan_progress = 0.0;
                         state.current_status = "Starting scan...".to_string();
@@ -46,8 +41,6 @@ impl IndexingTab {
                         let task_controller = TaskController::new();
                         state.active_task_control = Some(task_controller.clone());
                         command_sender.send(Command::StartInitialScan { path, task_controller }).unwrap();
-                    } else {
-                        state.current_status = "Please select a path to index.".to_string();
                     }
                 }
             });
@@ -93,7 +86,7 @@ impl IndexingTab {
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
                 .show(ui.ctx(), |ui| {
-                    ui.label(format!("Are you sure you want to delete the index for '{}'?", path));
+                    ui.label(format!("Are you sure you want to delete the index for '{path}'?"));
                     ui.horizontal(|ui| {
                         if ui.button("Yes, Delete").clicked() {
                             dialog_result = Some(true);
@@ -130,7 +123,7 @@ impl IndexingTab {
 
                     item_frame.show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(format!("📁 {}", path)).strong());
+                            ui.label(egui::RichText::new(format!("📁 {path}")).strong());
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if ui.button("🗑").on_hover_text("Delete Index").clicked() {
                                     self.confirming_delete = Some(path.clone());
@@ -138,12 +131,12 @@ impl IndexingTab {
                                 if ui.button("🔄").on_hover_text("Rescan").clicked() {
                                     state.is_running_task = true;
                                     state.scan_progress = 0.0;
-                                    state.current_status = format!("Rescanning {}...", path);
+                                    state.current_status = format!("Rescanning {path}...");
                                     let task_controller = TaskController::new();
                                 state.active_task_control = Some(task_controller.clone());
                                 command_sender.send(Command::StartRescan { path: PathBuf::from(path), task_controller }).unwrap();
                                 }
-                                ui.label(egui::RichText::new(format!("{} files", count)).weak());
+                                ui.label(egui::RichText::new(format!("{count} files")).weak());
                             });
                         });
                     });

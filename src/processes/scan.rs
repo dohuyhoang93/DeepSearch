@@ -12,7 +12,7 @@ use redb::TableDefinition;
 
 // --- PROCESSES ---
 
-/// Process: Scans the directory using a throughput-optimized parallel method (jwalk + par_bridge)
+/// Process: Scans the directory using a throughput-optimized parallel method (jwalk + `par_bridge`)
 /// and streams file data. This process is controllable.
 pub fn scan_directory_streaming(mut context: Context) -> anyhow::Result<Context> {
     let root_path = context.target_path.as_ref().unwrap().clone();
@@ -20,7 +20,7 @@ pub fn scan_directory_streaming(mut context: Context) -> anyhow::Result<Context>
     let controller = context.task_controller.take().ok_or_else(|| anyhow::anyhow!("Task controller not available for scan"))?;
     let (tx, rx) = mpsc::channel();
 
-    utils::report_progress(&reporter, 0.0, &format!("🔍 Starting initial scan for '{}'...", root_path.display()));
+    utils::report_progress(reporter.as_ref(), 0.0, &format!("🔍 Starting initial scan for '{}'...", root_path.display()));
 
     let action_root_path = root_path.clone();
     let tx_clone = tx.clone(); // Clone tx for the closure
@@ -40,8 +40,7 @@ pub fn scan_directory_streaming(mut context: Context) -> anyhow::Result<Context>
                     modified_time: meta.modified()
                         .ok()
                         .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-                        .map(|d| d.as_secs())
-                        .unwrap_or(0),
+                        .map_or(0, |d| d.as_secs()),
                 },
                 Err(_) => FileMetadata {
                     normalized_name: utils::normalize_string(&entry.file_name().to_string_lossy()),
@@ -54,7 +53,7 @@ pub fn scan_directory_streaming(mut context: Context) -> anyhow::Result<Context>
 
         utils::controlled_two_phase_scan(
             &action_root_path,
-            &reporter,
+            reporter.as_ref(),
             &controller,
             action,
         );
@@ -73,14 +72,14 @@ pub fn rescan_scan_streaming(mut context: Context) -> anyhow::Result<Context> {
     let controller = context.task_controller.take().ok_or_else(|| anyhow::anyhow!("Task controller not available for rescan scan"))?;
     let (tx, rx) = mpsc::channel();
 
-    utils::report_progress(&reporter, 0.0, &format!("🔄 Rescan Phase 1/3: Scanning for '{}'...", root_path.display()));
+    utils::report_progress(reporter.as_ref(), 0.0, &format!("🔄 Rescan Phase 1/3: Scanning for '{}'...", root_path.display()));
 
     let db_manager = DbManager::new(&db_path)?;
     let root_path_str = root_path.to_str().unwrap();
 
     // Get old table name
     let old_table_name = db_manager.get_table_name(root_path_str)?
-        .ok_or_else(|| anyhow::anyhow!("Could not find old table name for location '{}'", root_path_str))?;
+        .ok_or_else(|| anyhow::anyhow!("Could not find old table name for location '{root_path_str}'"))?;
 
     // Generate new table name
     let new_table_name = format!("index_{:x}_{}",
@@ -110,8 +109,7 @@ pub fn rescan_scan_streaming(mut context: Context) -> anyhow::Result<Context> {
                     modified_time: meta.modified()
                         .ok()
                         .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-                        .map(|d| d.as_secs())
-                        .unwrap_or(0),
+                        .map_or(0, |d| d.as_secs()),
                 },
                 Err(_) => FileMetadata {
                     normalized_name: utils::normalize_string(&entry.file_name().to_string_lossy()),
@@ -124,7 +122,7 @@ pub fn rescan_scan_streaming(mut context: Context) -> anyhow::Result<Context> {
 
         utils::controlled_two_phase_scan(
             &action_root_path,
-            &reporter,
+            reporter.as_ref(),
             &controller,
             action,
         );
@@ -136,7 +134,7 @@ pub fn rescan_scan_streaming(mut context: Context) -> anyhow::Result<Context> {
 
 
 
-/// Process: Performs the final atomic swap of the new index table with the old one, and cleans up.
+/// Process: Performs the final atomic swapof the new index table with the old one, and cleans up.
 pub fn rescan_atomic_swap_final(mut context: Context) -> anyhow::Result<Context> {
     let root_path = context.target_path.as_ref().unwrap().clone();
     let db_path = context.db_path.as_ref().unwrap().clone();
@@ -148,7 +146,7 @@ pub fn rescan_atomic_swap_final(mut context: Context) -> anyhow::Result<Context>
     let old_table_name = context.old_table_name.take()
         .ok_or_else(|| anyhow::anyhow!("Old table name not found in context for atomic swap"))?;
 
-    utils::report_progress(&reporter, 0.66, "🔄 Rescan Phase 3/3: Swapping index and cleaning up...");
+    utils::report_progress(reporter.as_ref(), 0.66, "🔄 Rescan Phase 3/3: Swapping index and cleaning up...");
 
     let db_manager = DbManager::new(&db_path)?;
 
@@ -161,7 +159,7 @@ pub fn rescan_atomic_swap_final(mut context: Context) -> anyhow::Result<Context>
     delete_txn.delete_table(old_table_def)?;
     delete_txn.commit()?;
 
-    utils::report_progress(&reporter, 1.0, "✅ Rescan complete.");
+    utils::report_progress(reporter.as_ref(), 1.0, "✅ Rescan complete.");
 
     Ok(context)
 }

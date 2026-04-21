@@ -1,4 +1,4 @@
-use redb::{Database, ReadableTable, ReadableTableMetadata, TableDefinition};
+use redb::{Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition};
 use serde::{Deserialize, Serialize};
 use bincode::{Decode, Encode};
 use std::path::Path;
@@ -155,7 +155,7 @@ impl DbManager {
             // Get the old table name
             old_table_name = locations_table.get(root_path)?
                 .map(|guard| guard.value().to_string())
-                .ok_or_else(|| anyhow::anyhow!("Could not find old table name for location '{}'", root_path))?;
+                .ok_or_else(|| anyhow::anyhow!("Could not find old table name for location '{root_path}'"))?;
 
             // Point the location to the new table
             locations_table.insert(root_path, new_table_name)?;
